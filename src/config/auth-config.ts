@@ -1,6 +1,7 @@
 /**
  * Authentication Configuration
- * Configuration for Claude subscription and Anthropic API authentication.
+ * Configuration for multi-provider authentication (Anthropic, OpenAI, Google, Cursor).
+ * Supports Claude subscription, API keys, and OAuth flows.
  *
  * Copyright (c) 2025 Dobeu Tech Solutions LLC
  * Licensed under CC BY-NC 4.0
@@ -8,13 +9,15 @@
 
 import { join } from 'path';
 import { homedir } from 'os';
+import type { ProviderName } from './provider-config.js';
 
 /**
  * Authentication method types
- * - subscription: Claude.ai subscription (Pro/Max/Team/Enterprise) via OAuth
- * - api_key: Anthropic API key from console.anthropic.com
+ * - subscription: Subscription-based auth (Claude.ai, OpenAI Plus, etc.) via OAuth
+ * - api_key: API key from provider console
+ * - oauth: OAuth 2.0 flow
  */
-export type AuthMethod = 'api_key' | 'subscription';
+export type AuthMethod = 'api_key' | 'subscription' | 'oauth';
 
 /**
  * Authentication source - how credentials were obtained
@@ -114,13 +117,125 @@ export const authConfig: AuthConfig = {
 };
 
 /**
- * Environment variable names for auth
+ * Environment variable names for auth (legacy - Anthropic only)
  */
 export const AUTH_ENV_VARS = {
   API_KEY: 'ANTHROPIC_API_KEY',
   SUBSCRIPTION_KEY: 'ANTHROPIC_SUBSCRIPTION_KEY',
   ACCESS_TOKEN: 'ANTHROPIC_ACCESS_TOKEN',
 } as const;
+
+/**
+ * Environment variable names per provider
+ */
+export const PROVIDER_ENV_VARS: Record<ProviderName, {
+  API_KEY: string;
+  SUBSCRIPTION_KEY?: string;
+  ACCESS_TOKEN?: string;
+}> = {
+  anthropic: {
+    API_KEY: 'ANTHROPIC_API_KEY',
+    SUBSCRIPTION_KEY: 'ANTHROPIC_SUBSCRIPTION_KEY',
+    ACCESS_TOKEN: 'ANTHROPIC_ACCESS_TOKEN',
+  },
+  openai: {
+    API_KEY: 'OPENAI_API_KEY',
+    ACCESS_TOKEN: 'OPENAI_ACCESS_TOKEN',
+  },
+  google: {
+    API_KEY: 'GOOGLE_API_KEY',
+    ACCESS_TOKEN: 'GOOGLE_ACCESS_TOKEN',
+  },
+  cursor: {
+    API_KEY: 'CURSOR_API_KEY',
+  },
+};
+
+/**
+ * Provider-specific credentials
+ */
+export interface ProviderCredentials {
+  enabled: boolean;
+  method: AuthMethod;
+  source: AuthSource | null;
+  apiKey?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  expiresAt?: number;
+  organizationId?: string;
+  projectId?: string;
+  email?: string;
+  tier?: string;
+}
+
+/**
+ * Multi-provider credentials store (v2.0)
+ */
+export interface MultiProviderCredentials {
+  version: string;
+  default_provider: ProviderName;
+  providers: Partial<Record<ProviderName, ProviderCredentials>>;
+  preferences: {
+    cost_tracking: boolean;
+    monthly_budget_usd: number;
+    prefer_subscription: boolean;
+  };
+}
+
+/**
+ * Default multi-provider credentials structure
+ */
+export const DEFAULT_MULTI_PROVIDER_CREDENTIALS: MultiProviderCredentials = {
+  version: '2.0.0',
+  default_provider: 'anthropic',
+  providers: {},
+  preferences: {
+    cost_tracking: true,
+    monthly_budget_usd: 100,
+    prefer_subscription: true,
+  },
+};
+
+/**
+ * Check if credentials are in v2 (multi-provider) format
+ */
+export function isMultiProviderCredentials(data: unknown): data is MultiProviderCredentials {
+  if (typeof data !== 'object' || data === null) return false;
+  const obj = data as Record<string, unknown>;
+  return (
+    typeof obj.version === 'string' &&
+    obj.version.startsWith('2.') &&
+    typeof obj.providers === 'object'
+  );
+}
+
+/**
+ * Migrate v1 credentials to v2 format
+ */
+export function migrateToMultiProvider(v1Credentials: UserCredentials): MultiProviderCredentials {
+  return {
+    version: '2.0.0',
+    default_provider: 'anthropic',
+    providers: {
+      anthropic: {
+        enabled: true,
+        method: v1Credentials.method,
+        source: v1Credentials.source ?? null,
+        apiKey: v1Credentials.apiKey,
+        accessToken: v1Credentials.accessToken ?? v1Credentials.subscriptionKey,
+        refreshToken: v1Credentials.refreshToken,
+        expiresAt: v1Credentials.expiresAt,
+        email: v1Credentials.email,
+        tier: v1Credentials.tier,
+      },
+    },
+    preferences: {
+      cost_tracking: true,
+      monthly_budget_usd: 100,
+      prefer_subscription: v1Credentials.method === 'subscription',
+    },
+  };
+}
 
 /**
  * Get the credentials file path
