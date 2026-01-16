@@ -16,6 +16,8 @@ import { agentConfig } from "./config/agent-config.js";
 import { runInitializerAgent } from "./agents/initializer.js";
 import { runCodingAgent } from "./agents/coding.js";
 import { isAuthenticated, checkAuth, setEnvForChildProcess, authManager } from "./utils/auth-manager.js";
+import { multiAuthManager } from "./utils/multi-auth-manager.js";
+import type { ProviderName } from "./config/provider-config.js";
 
 /**
  * Check if this is the first run (no .agent directory)
@@ -60,6 +62,11 @@ async function runWithRetry(
 }
 
 /**
+ * Valid provider names for --provider option
+ */
+const VALID_PROVIDERS: ProviderName[] = ['anthropic', 'openai', 'google', 'cursor'];
+
+/**
  * Parse command line arguments
  */
 function parseArgs(): {
@@ -70,17 +77,45 @@ function parseArgs(): {
   login: boolean;
   logout: boolean;
   whoami: boolean;
+  providers: boolean;
+  provider: ProviderName | 'all' | undefined;
+  setDefault: ProviderName | undefined;
 } {
   const args = process.argv.slice(2);
-  
+
+  // Parse --provider=<name> option
+  const providerArg = args.find(a => a.startsWith("--provider="))?.split("=")[1];
+  let provider: ProviderName | 'all' | undefined;
+  if (providerArg) {
+    if (providerArg === 'all') {
+      provider = 'all';
+    } else if (VALID_PROVIDERS.includes(providerArg as ProviderName)) {
+      provider = providerArg as ProviderName;
+    } else {
+      console.error(`\n✗ Invalid provider: "${providerArg}"`);
+      console.error(`  Valid providers: ${VALID_PROVIDERS.join(', ')}, all\n`);
+      process.exit(1);
+    }
+  }
+
+  // Parse --set-default=<name> option
+  const setDefaultArg = args.find(a => a.startsWith("--set-default="))?.split("=")[1];
+  let setDefault: ProviderName | undefined;
+  if (setDefaultArg && VALID_PROVIDERS.includes(setDefaultArg as ProviderName)) {
+    setDefault = setDefaultArg as ProviderName;
+  }
+
   return {
     forceInit: args.includes("--init") || process.env.FORCE_INIT === "true",
     forceCoding: args.includes("--code"),
     spec: args.find(a => a.startsWith("--spec="))?.split("=").slice(1).join("="),
     context: args.find(a => a.startsWith("--context="))?.split("=").slice(1).join("="),
-    login: args.includes("--login"),
-    logout: args.includes("--logout"),
-    whoami: args.includes("--whoami"),
+    login: args.includes("--login") || args.includes("login"),
+    logout: args.includes("--logout") || args.includes("logout"),
+    whoami: args.includes("--whoami") || args.includes("whoami"),
+    providers: args.includes("--providers") || args.includes("providers"),
+    provider,
+    setDefault,
   };
 }
 
@@ -90,36 +125,109 @@ function parseArgs(): {
 function showUsage(): void {
   console.log(`
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                    LONG-RUNNING AGENT FRAMEWORK                              ║
+║                    MONTY FULL-STACK AGENT FRAMEWORK                          ║
 ║                                                                              ║
-║  Based on Anthropic's best practices for effective agent harnesses           ║
+║  Multi-provider AI orchestration with Claude, OpenAI, Google, and Cursor     ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
 USAGE:
-  npm start                    Auto-detect mode (init or coding)
-  npm run agent:init           Force initialization mode
-  npm run agent:code           Force coding mode
+  monty                        Auto-detect mode (init or coding)
+  monty init                   Force initialization mode
+  monty code                   Force coding mode
 
-OPTIONS:
+AUTHENTICATION:
+  monty login                  Interactive login (auto-detects Claude Code)
+  monty login --provider=NAME  Login to specific provider
+  monty logout                 Logout from all providers
+  monty logout --provider=NAME Logout from specific provider
+  monty whoami                 Show current authentication status
+  monty providers              Show all provider status
+
+  Provider Names: anthropic, openai, google, cursor, all
+
+PROVIDER OPTIONS:
+  --provider=NAME              Target specific provider (anthropic, openai, google, cursor)
+  --provider=all               Configure all providers
+  --set-default=NAME           Set default provider for routing
+
+AGENT OPTIONS:
   --init                       Force run initializer agent
   --code                       Force run coding agent
   --spec="..."                 Project specification for initializer
   --context="..."              Additional context for coding agent
 
-ENVIRONMENT:
+ENVIRONMENT VARIABLES:
+  ANTHROPIC_API_KEY            Anthropic/Claude API key
+  OPENAI_API_KEY               OpenAI/Codex API key
+  GOOGLE_API_KEY               Google/Gemini API key
+  CURSOR_API_KEY               Cursor Cloud API key
   FORCE_INIT=true              Force initialization mode
 
 WORKFLOW:
   1. First run automatically triggers Initializer Agent
   2. Subsequent runs use Coding Agent for incremental progress
-  3. Each session reads progress file and continues from where it left off
+  3. Task orchestrator routes tasks to optimal provider
+  4. Multi-agent review available for code review tasks
 
 FILES:
+  ~/.monty/credentials.json    Multi-provider credentials (v2.0)
   .agent/feature_list.json     Feature tracking (JSON)
   .agent/claude-progress.txt   Progress log between sessions
-  scripts/init.sh              Unix environment setup
-  scripts/init.ps1             Windows environment setup
+
+EXAMPLES:
+  monty login                      # Interactive login, auto-detect Claude Code
+  monty login --provider=openai    # Login to OpenAI only
+  monty login --provider=all       # Configure all providers
+  monty providers                  # Show status of all providers
+  monty --set-default=google       # Set Google as default provider
 `);
+}
+
+/**
+ * Display provider status
+ */
+function showProviderStatus(): void {
+  console.log('\n╔══════════════════════════════════════════════════════════════════════════════╗');
+  console.log('║                         AI PROVIDER STATUS                                   ║');
+  console.log('╚══════════════════════════════════════════════════════════════════════════════╝\n');
+
+  const providers = multiAuthManager.getProviderDisplayInfo();
+  const defaultProvider = multiAuthManager.getDefaultProvider();
+
+  console.log('  Provider          Status              Auth Method    Default');
+  console.log('  ─────────────────────────────────────────────────────────────────────────────');
+
+  for (const provider of providers) {
+    const status = provider.authenticated
+      ? '\x1b[32m✓ Authenticated\x1b[0m'
+      : '\x1b[90m○ Not configured\x1b[0m';
+    const method = provider.method ?? '-';
+    const isDefault = provider.name === defaultProvider ? '★' : '';
+    const keyPreview = provider.keyPreview ? ` (${provider.keyPreview})` : '';
+
+    console.log(
+      `  ${provider.displayName.padEnd(18)} ${(provider.authenticated ? '✓ Authenticated' : '○ Not configured').padEnd(20)} ${method.padEnd(14)} ${isDefault}`
+    );
+    if (provider.keyPreview) {
+      console.log(`                      Key: ${provider.keyPreview}`);
+    }
+  }
+
+  const authenticatedCount = providers.filter(p => p.authenticated).length;
+
+  console.log('\n  ─────────────────────────────────────────────────────────────────────────────');
+  console.log(`  Authenticated: ${authenticatedCount}/${providers.length} providers`);
+  console.log(`  Default: ${defaultProvider}`);
+
+  if (authenticatedCount === 0) {
+    console.log('\n  Run "monty login" to authenticate with a provider.');
+  } else if (authenticatedCount === 1) {
+    console.log('\n  Run "monty login --provider=NAME" to add more providers.');
+  } else {
+    console.log('\n  Multi-agent code review is available with multiple providers.');
+  }
+
+  console.log('');
 }
 
 /**
@@ -134,63 +242,135 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
+  // Handle set-default option
+  if (args.setDefault) {
+    multiAuthManager.setDefaultProvider(args.setDefault);
+    console.log(`\n✓ Default provider set to: ${args.setDefault}\n`);
+    process.exit(0);
+  }
+
+  // Handle providers command - show all provider status
+  if (args.providers) {
+    showProviderStatus();
+    process.exit(0);
+  }
+
   // Handle authentication commands FIRST (before auth check)
   if (args.login) {
-    const { authManager } = await import("./utils/auth-manager.js");
-    const success = await authManager.login();
+    let success: boolean;
+    if (args.provider === 'all') {
+      await multiAuthManager.loginAll();
+      success = multiAuthManager.isAnyProviderAuthenticated();
+    } else if (args.provider) {
+      success = await multiAuthManager.loginProvider(args.provider);
+    } else {
+      // Default: try multi-auth login (starts with Anthropic auto-detect)
+      success = await multiAuthManager.loginProvider('anthropic');
+      if (success) {
+        // Ask if user wants to configure additional providers
+        const rl = await import('readline').then(m => m.createInterface({
+          input: process.stdin,
+          output: process.stdout,
+        }));
+        const answer = await new Promise<string>(resolve => {
+          rl.question('\nWould you like to configure additional providers? (y/N): ', resolve);
+        });
+        rl.close();
+        if (answer.toLowerCase() === 'y') {
+          for (const provider of ['openai', 'google', 'cursor'] as ProviderName[]) {
+            const configure = await new Promise<string>(resolve => {
+              const rl2 = require('readline').createInterface({
+                input: process.stdin,
+                output: process.stdout,
+              });
+              rl2.question(`Configure ${provider}? (y/N): `, (ans: string) => {
+                rl2.close();
+                resolve(ans);
+              });
+            });
+            if (configure.toLowerCase() === 'y') {
+              await multiAuthManager.loginProvider(provider);
+            }
+          }
+        }
+      }
+    }
     process.exit(success ? 0 : 1);
   }
 
   if (args.logout) {
-    const { authManager } = await import("./utils/auth-manager.js");
-    authManager.logout();
+    if (args.provider && args.provider !== 'all') {
+      multiAuthManager.logoutProvider(args.provider);
+    } else {
+      multiAuthManager.logoutAll();
+    }
     process.exit(0);
   }
 
   if (args.whoami) {
-    const { authManager } = await import("./utils/auth-manager.js");
-    authManager.whoami();
+    multiAuthManager.whoami();
     process.exit(0);
   }
 
-  // Check authentication for other commands
-  const authStatus = checkAuth();
-  if (!authStatus.authenticated) {
+  // Check authentication for other commands - now checks any provider
+  if (!multiAuthManager.isAnyProviderAuthenticated()) {
     console.log(`
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                         AUTHENTICATION REQUIRED                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
-${authStatus.message}
+No AI provider is authenticated.
 
 To authenticate, choose one of:
-  1. Run: monty login
-  2. Set environment variable: export ANTHROPIC_API_KEY=your-key
-  3. Set environment variable: export ANTHROPIC_SUBSCRIPTION_KEY=your-key
+  1. Run: monty login                          (auto-detect Claude Code)
+  2. Run: monty login --provider=anthropic     (configure Anthropic/Claude)
+  3. Run: monty login --provider=openai        (configure OpenAI/Codex)
+  4. Run: monty login --provider=google        (configure Google/Gemini)
+  5. Run: monty login --provider=all           (configure all providers)
+
+Or set environment variables:
+  export ANTHROPIC_API_KEY=your-key
+  export OPENAI_API_KEY=your-key
+  export GOOGLE_API_KEY=your-key
 `);
     process.exit(1);
   }
 
   // Validate authentication before proceeding (async to handle token refresh)
-  const apiKey = await authManager.getApiKey();
+  const defaultProvider = multiAuthManager.getDefaultProvider();
+  const apiKey = await multiAuthManager.getApiKey(defaultProvider);
   if (!apiKey) {
-    console.error(`
-❌ No valid authentication found.
+    // Try to find any authenticated provider
+    const authenticatedProviders = multiAuthManager.getAuthenticatedProviders();
+    if (authenticatedProviders.length === 0) {
+      console.error(`
+No valid authentication found for any provider.
 
-Please authenticate using one of these methods:
-  1. Run: monty login
-  2. Set environment variable: export ANTHROPIC_API_KEY="your-key"
+Please authenticate using: monty login
 `);
-    process.exit(1);
+      process.exit(1);
+    }
+    // Use the first authenticated provider
+    const fallbackProvider = authenticatedProviders[0]!;
+    console.log(`Default provider (${defaultProvider}) not authenticated, using ${fallbackProvider}`);
+    multiAuthManager.setDefaultProvider(fallbackProvider);
   }
 
-  // Ensure API key is set in environment for SDK
-  setEnvForChildProcess();
+  // Ensure API keys are set in environment for all authenticated providers
+  multiAuthManager.setEnvForChildProcess();
+
+  // Show provider status
+  const authenticatedProviders = multiAuthManager.getAuthenticatedProviders();
+  const providerList = authenticatedProviders.length > 1
+    ? `(${authenticatedProviders.join(', ')})`
+    : `(${defaultProvider})`;
 
   console.log(`
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                    LONG-RUNNING AGENT FRAMEWORK                              ║
+║                    MONTY FULL-STACK AGENT FRAMEWORK                          ║
+║                  Multi-Provider AI Orchestration System                      ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
+  Providers: ${authenticatedProviders.length} active ${providerList}
 `);
 
   // Determine which agent to run
