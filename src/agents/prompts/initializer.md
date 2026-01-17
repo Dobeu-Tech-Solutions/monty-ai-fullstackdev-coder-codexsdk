@@ -66,15 +66,24 @@ After creating all files:
 - Stage all new files
 - Create an initial commit with message: "[agent] Initialize project environment"
 
+## PROVIDER MANAGEMENT
+
+Before starting, check which AI providers are available:
+- Only use providers that are authenticated (check credentials file or environment variables)
+- Skip providers that are opted out (check `optedOutProviders` in credentials)
+- The system will automatically route tasks to available providers
+- If a provider was previously opted out but is now authenticated, it will be included
+
 ## EXECUTION STEPS
 
-1. **Analyze** the user's project specification thoroughly
-2. **Plan** the complete feature set before writing anything
-3. **Create** the `.agent` directory if it doesn't exist
-4. **Write** `feature_list.json` with ALL features
-5. **Write** `claude-progress.txt` with initial state
-6. **Create** init scripts for both Unix and Windows
-7. **Commit** all changes to git
+1. **Check Available Providers** - Verify which AI providers are authenticated and available
+2. **Analyze** the user's project specification thoroughly
+3. **Plan** the complete feature set before writing anything
+4. **Create** the `.agent` directory if it doesn't exist
+5. **Write** `feature_list.json` with ALL features
+6. **Write** `claude-progress.txt` with initial state
+7. **Create** init scripts for both Unix and Windows
+8. **Commit** all changes to git
 
 ## CONSTRAINTS
 

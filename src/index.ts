@@ -80,6 +80,7 @@ function parseArgs(): {
   providers: boolean;
   provider: ProviderName | 'all' | undefined;
   setDefault: ProviderName | undefined;
+  addProvider: ProviderName | undefined;
 } {
   const args = process.argv.slice(2);
 
@@ -105,6 +106,13 @@ function parseArgs(): {
     setDefault = setDefaultArg as ProviderName;
   }
 
+  // Parse --add-provider=<name> option
+  const addProviderArg = args.find(a => a.startsWith("--add-provider="))?.split("=")[1];
+  let addProvider: ProviderName | undefined;
+  if (addProviderArg && VALID_PROVIDERS.includes(addProviderArg as ProviderName)) {
+    addProvider = addProviderArg as ProviderName;
+  }
+
   return {
     forceInit: args.includes("--init") || process.env.FORCE_INIT === "true",
     forceCoding: args.includes("--code"),
@@ -116,6 +124,7 @@ function parseArgs(): {
     providers: args.includes("--providers") || args.includes("providers"),
     provider,
     setDefault,
+    addProvider,
   };
 }
 
@@ -131,17 +140,17 @@ function showUsage(): void {
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
 USAGE:
-  monty                        Auto-detect mode (init or coding)
-  monty init                   Force initialization mode
-  monty code                   Force coding mode
+  montyx                        Auto-detect mode (init or coding)
+  montyx init                   Force initialization mode
+  montyx code                   Force coding mode
 
 AUTHENTICATION:
-  monty login                  Interactive login (auto-detects Claude Code)
-  monty login --provider=NAME  Login to specific provider
-  monty logout                 Logout from all providers
-  monty logout --provider=NAME Logout from specific provider
-  monty whoami                 Show current authentication status
-  monty providers              Show all provider status
+  montyx login                  Interactive login (auto-detects Claude Code)
+  montyx login --provider=NAME  Login to specific provider
+  montyx logout                 Logout from all providers
+  montyx logout --provider=NAME Logout from specific provider
+  montyx whoami                 Show current authentication status
+  montyx providers              Show all provider status
 
   Provider Names: anthropic, openai, google, cursor, all
 
@@ -149,6 +158,7 @@ PROVIDER OPTIONS:
   --provider=NAME              Target specific provider (anthropic, openai, google, cursor)
   --provider=all               Configure all providers
   --set-default=NAME           Set default provider for routing
+  --add-provider=NAME          Add provider after initialization (removes from opted-out list)
 
 AGENT OPTIONS:
   --init                       Force run initializer agent
@@ -175,11 +185,11 @@ FILES:
   .agent/claude-progress.txt   Progress log between sessions
 
 EXAMPLES:
-  monty login                      # Interactive login, auto-detect Claude Code
-  monty login --provider=openai    # Login to OpenAI only
-  monty login --provider=all       # Configure all providers
-  monty providers                  # Show status of all providers
-  monty --set-default=google       # Set Google as default provider
+  montyx login                      # Interactive login, auto-detect Claude Code
+  montyx login --provider=openai    # Login to OpenAI only
+  montyx login --provider=all       # Configure all providers
+  montyx providers                  # Show status of all providers
+  montyx --set-default=google       # Set Google as default provider
 `);
 }
 
@@ -220,9 +230,9 @@ function showProviderStatus(): void {
   console.log(`  Default: ${defaultProvider}`);
 
   if (authenticatedCount === 0) {
-    console.log('\n  Run "monty login" to authenticate with a provider.');
+    console.log('\n  Run "montyx login" to authenticate with a provider.');
   } else if (authenticatedCount === 1) {
-    console.log('\n  Run "monty login --provider=NAME" to add more providers.');
+    console.log('\n  Run "montyx login --provider=NAME" to add more providers.');
   } else {
     console.log('\n  Multi-agent code review is available with multiple providers.');
   }
@@ -247,6 +257,12 @@ async function main(): Promise<void> {
     multiAuthManager.setDefaultProvider(args.setDefault);
     console.log(`\n✓ Default provider set to: ${args.setDefault}\n`);
     process.exit(0);
+  }
+
+  // Handle add-provider option
+  if (args.addProvider) {
+    const success = await multiAuthManager.addProviderAfterInit(args.addProvider);
+    process.exit(success ? 0 : 1);
   }
 
   // Handle providers command - show all provider status
@@ -290,6 +306,9 @@ async function main(): Promise<void> {
             });
             if (configure.toLowerCase() === 'y') {
               await multiAuthManager.loginProvider(provider);
+            } else {
+              // Mark as opted out
+              multiAuthManager.markProviderOptedOut(provider);
             }
           }
         }
@@ -322,11 +341,11 @@ async function main(): Promise<void> {
 No AI provider is authenticated.
 
 To authenticate, choose one of:
-  1. Run: monty login                          (auto-detect Claude Code)
-  2. Run: monty login --provider=anthropic     (configure Anthropic/Claude)
-  3. Run: monty login --provider=openai        (configure OpenAI/Codex)
-  4. Run: monty login --provider=google        (configure Google/Gemini)
-  5. Run: monty login --provider=all           (configure all providers)
+  1. Run: montyx login                          (auto-detect Claude Code)
+  2. Run: montyx login --provider=anthropic     (configure Anthropic/Claude)
+  3. Run: montyx login --provider=openai        (configure OpenAI/Codex)
+  4. Run: montyx login --provider=google        (configure Google/Gemini)
+  5. Run: montyx login --provider=all           (configure all providers)
 
 Or set environment variables:
   export ANTHROPIC_API_KEY=your-key
@@ -346,7 +365,7 @@ Or set environment variables:
       console.error(`
 No valid authentication found for any provider.
 
-Please authenticate using: monty login
+Please authenticate using: montyx login
 `);
       process.exit(1);
     }

@@ -11,11 +11,11 @@
  * Takes projects from idea to production deployment.
  *
  * Usage:
- *   monty                        - Auto-detect mode (init or continue coding)
- *   monty init                   - Initialize a new project
- *   monty code                   - Continue coding session
- *   monty --spec="..."          - Start with a project specification
- *   monty --help                - Show help
+ *   montyx                       - Auto-detect mode (init or continue coding)
+ *   montyx init                  - Initialize a new project
+ *   montyx code                  - Continue coding session
+ *   montyx --spec="..."          - Start with a project specification
+ *   montyx --help                - Show help
  *
  * Install globally:
  *   npm install -g monty-autonomous-fullstack-dev-multillm
@@ -106,16 +106,16 @@ function showHelp() {
   showBanner();
   console.log(`
 ${colors.bright}USAGE:${colors.reset}
-  ${colors.cyan}monty${colors.reset}                              Auto-detect mode
-  ${colors.cyan}monty init${colors.reset}                         Initialize new project
-  ${colors.cyan}monty code${colors.reset}                         Continue coding session
-  ${colors.cyan}monty setup${colors.reset}                        Set up monty in current directory
-  ${colors.cyan}monty status${colors.reset}                       Show project progress
+  ${colors.cyan}montyx${colors.reset}                              Auto-detect mode
+  ${colors.cyan}montyx init${colors.reset}                         Initialize new project
+  ${colors.cyan}montyx code${colors.reset}                         Continue coding session
+  ${colors.cyan}montyx setup${colors.reset}                        Set up montyx in current directory
+  ${colors.cyan}montyx status${colors.reset}                       Show project progress
 
 ${colors.bright}AUTHENTICATION:${colors.reset}
-  ${colors.cyan}monty login${colors.reset}                        Sign in (Auto-detect / OAuth / API Key)
-  ${colors.cyan}monty logout${colors.reset}                       Sign out and clear credentials
-  ${colors.cyan}monty whoami${colors.reset}                       Show current authentication status
+  ${colors.cyan}montyx login${colors.reset}                        Sign in (Auto-detect / OAuth / API Key)
+  ${colors.cyan}montyx logout${colors.reset}                       Sign out and clear credentials
+  ${colors.cyan}montyx whoami${colors.reset}                       Show current authentication status
 
 ${colors.bright}OPTIONS:${colors.reset}
   ${colors.yellow}--spec="..."${colors.reset}                     Project specification
@@ -126,25 +126,25 @@ ${colors.bright}OPTIONS:${colors.reset}
 ${colors.bright}QUICK START:${colors.reset}
   ${colors.dim}# Create a new project${colors.reset}
   ${colors.green}mkdir my-app && cd my-app${colors.reset}
-  ${colors.green}monty init --spec="Build a todo app with React and Supabase"${colors.reset}
+  ${colors.green}montyx init --spec="Build a todo app with React and Supabase"${colors.reset}
 
   ${colors.dim}# Continue development${colors.reset}
-  ${colors.green}monty code${colors.reset}
+  ${colors.green}montyx code${colors.reset}
 
   ${colors.dim}# Or use npx directly${colors.reset}
   ${colors.green}npx monty-autonomous-fullstack-dev-multillm init --spec="Your project idea..."${colors.reset}
 
 ${colors.bright}WORKFLOW:${colors.reset}
-  1. ${colors.cyan}monty init${colors.reset} - Analyzes your spec and creates feature list
-  2. ${colors.cyan}monty code${colors.reset} - Implements features incrementally with testing
-  3. Repeat ${colors.cyan}monty code${colors.reset} until all features pass
+  1. ${colors.cyan}montyx init${colors.reset} - Analyzes your spec and creates feature list
+  2. ${colors.cyan}montyx code${colors.reset} - Implements features incrementally with testing
+  3. Repeat ${colors.cyan}montyx code${colors.reset} until all features pass
 
 ${colors.bright}FILES CREATED:${colors.reset}
   ${colors.dim}.agent/feature_list.json${colors.reset}     Feature tracking
   ${colors.dim}.agent/claude-progress.txt${colors.reset}   Progress between sessions
 
 ${colors.bright}ENVIRONMENT:${colors.reset}
-  ${colors.yellow}ANTHROPIC_API_KEY${colors.reset}          Anthropic API key (or use "monty login")
+  ${colors.yellow}ANTHROPIC_API_KEY${colors.reset}          Anthropic API key (or use "montyx login")
   ${colors.yellow}ANTHROPIC_SUBSCRIPTION_KEY${colors.reset} Claude Code subscription key
 
 ${colors.bright}DOCUMENTATION:${colors.reset}
@@ -172,12 +172,12 @@ function showStatus() {
 
   if (!existsSync(agentDir)) {
     log('\n⚠️  No .agent directory found. Project not initialized.', colors.yellow);
-    log('   Run: monty init --spec="Your project idea..."', colors.dim);
+    log('   Run: montyx init --spec="Your project idea..."', colors.dim);
     return;
   }
 
   if (!existsSync(featureListPath)) {
-    log('\n⚠️  Feature list not found. Run: monty init', colors.yellow);
+    log('\n⚠️  Feature list not found. Run: montyx init', colors.yellow);
     return;
   }
 
@@ -222,7 +222,7 @@ function showStatus() {
     }
 
     log('\n' + '─'.repeat(50), colors.dim);
-    log('   Run "monty code" to continue development', colors.dim);
+    log('   Run "montyx code" to continue development', colors.dim);
   } catch (err) {
     log(`\n❌ Error reading feature list: ${err.message}`, colors.red);
   }
@@ -238,7 +238,7 @@ async function setupInDirectory() {
   // Check if already initialized
   if (existsSync(join(cwd, '.agent'))) {
     log('\n✅ Project already initialized!', colors.green);
-    log('   Run "monty code" to continue development.', colors.dim);
+    log('   Run "montyx code" to continue development.', colors.dim);
     return;
   }
 
@@ -246,12 +246,12 @@ async function setupInDirectory() {
   if (!existsSync(join(cwd, 'package.json'))) {
     log('\n⚠️  No package.json found.', colors.yellow);
     log('   This appears to be a new project.', colors.dim);
-    log('   Run: monty init --spec="Your project idea..."', colors.dim);
+    log('   Run: montyx init --spec="Your project idea..."', colors.dim);
     return;
   }
 
   log('\n✅ Ready to initialize!', colors.green);
-  log('   Run: monty init --spec="Your project specification..."', colors.dim);
+  log('   Run: montyx init --spec="Your project specification..."', colors.dim);
 }
 
 // To avoid duplicating logic in CLI and potentially having sync issues,
@@ -385,7 +385,7 @@ async function main() {
     log('─'.repeat(50), colors.dim);
     log('\nYou need to authenticate before running the agent.', colors.white);
     log('\nOptions:', colors.white);
-    log('  1. Run "monty login" to sign in interactively', colors.cyan);
+    log('  1. Run "montyx login" to sign in interactively', colors.cyan);
     log(`  2. Set ${AUTH_CONFIG.envVars.API_KEY} environment variable`, colors.cyan);
     log(`  3. Set ${AUTH_CONFIG.envVars.SUBSCRIPTION_KEY} environment variable\n`, colors.cyan);
     process.exit(1);

@@ -15,8 +15,15 @@ The prompt includes comprehensive system status information:
 - **Error Recovery**: Recent errors, checkpoints for rollback
 - **Environment**: Configuration validation, missing variables
 - **Health Check**: System health, build status, dependencies
+- **Provider Status**: Available AI providers, opted-out providers, newly added providers
 
 Review all status sections before proceeding.
+
+**Provider Management Notes:**
+- Check which providers are authenticated and available
+- Skip providers that are opted out (they won't be used for routing)
+- If a provider was recently added via `--add-provider`, it should now be included in routing decisions
+- The orchestrator will automatically route tasks to the best available provider
 
 ### Step 2: Orient Yourself
 ```bash

@@ -8,19 +8,20 @@ echo "🧪 Authentication Test Suite"
 echo "=============================="
 echo ""
 
-# Test 1: Check if monty command is available
-echo "Test 1: Verify monty command is available"
-if ! command -v monty &> /dev/null; then
-    echo "✗ monty command not found"
+# Test 1: Check if montyx command is available
+echo "Test 1: Verify montyx command is available"
+if ! command -v montyx &> /dev/null; then
+    echo "✗ montyx command not found"
     echo "  Please run: npm link (for local development) or npm install -g monty-autonomous-fullstack-dev-multillm"
+    echo "  Then use: montyx --help"
     exit 1
 fi
-echo "✓ monty command found"
+echo "✓ montyx command found"
 echo ""
 
 # Test 2: Check authentication status
 echo "Test 2: Check current authentication status"
-monty whoami
+montyx whoami
 echo ""
 
 # Test 3: Prompt user to test login flow
@@ -29,8 +30,8 @@ if [[ $test_login =~ ^[Yy]$ ]]; then
     echo ""
     echo "Test 3: Testing login flow"
     echo "  Please follow the prompts..."
-    monty logout
-    monty login
+    montyx logout
+    montyx login
 
     if [ $? -eq 0 ]; then
         echo "✓ Login successful"
@@ -43,7 +44,7 @@ fi
 
 # Test 4: Verify authentication after login
 echo "Test 4: Verify authentication status after login"
-monty whoami
+montyx whoami
 if [ $? -eq 0 ]; then
     echo "✓ Authentication verified"
 else
@@ -63,7 +64,7 @@ if [[ $test_agent =~ ^[Yy]$ ]]; then
     cd "$TEST_DIR"
 
     echo "  Running agent in: $TEST_DIR"
-    monty init --spec="Build a simple counter app with React"
+    montyx init --spec="Build a simple counter app with React"
 
     if [ $? -eq 0 ]; then
         echo "✓ Agent executed successfully"
@@ -84,7 +85,7 @@ echo ""
 echo "Manual verification checklist:"
 echo "  [ ] Credentials stored in ~/.monty/credentials.json"
 echo "  [ ] File permissions are secure (0600 on Unix, restricted on Windows)"
-echo "  [ ] monty whoami shows correct authentication method"
+echo "  [ ] montyx whoami shows correct authentication method"
 echo "  [ ] Agent can start and make API calls"
 echo "  [ ] Token expiration is displayed correctly"
 echo ""

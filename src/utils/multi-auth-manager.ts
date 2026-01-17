@@ -598,6 +598,62 @@ export class MultiAuthManager {
   }
 
   /**
+   * Mark a provider as opted out (skipped during initial setup)
+   */
+  public markProviderOptedOut(provider: ProviderName): void {
+    if (!this.credentials.optedOutProviders) {
+      this.credentials.optedOutProviders = [];
+    }
+    if (!this.credentials.optedOutProviders.includes(provider)) {
+      this.credentials.optedOutProviders.push(provider);
+      this.saveCredentials(this.credentials);
+    }
+  }
+
+  /**
+   * Get list of opted-out providers
+   */
+  public getOptedOutProviders(): ProviderName[] {
+    return this.credentials.optedOutProviders || [];
+  }
+
+  /**
+   * Check if a provider is opted out
+   */
+  public isProviderOptedOut(provider: ProviderName): boolean {
+    return this.getOptedOutProviders().includes(provider);
+  }
+
+  /**
+   * Add a provider after initialization (removes from opted-out list and prompts for credentials)
+   */
+  public async addProviderAfterInit(provider: ProviderName): Promise<boolean> {
+    // Remove from opted-out list if present
+    if (this.credentials.optedOutProviders) {
+      this.credentials.optedOutProviders = this.credentials.optedOutProviders.filter(
+        p => p !== provider
+      );
+      this.saveCredentials(this.credentials);
+    }
+
+    // Check if already authenticated
+    if (this.isProviderAuthenticated(provider)) {
+      console.log(`\n✓ ${getProviderConfig(provider).displayName} is already configured.`);
+      return true;
+    }
+
+    // Prompt for credentials
+    console.log(`\nAdding ${getProviderConfig(provider).displayName}...`);
+    const success = await this.loginProvider(provider);
+    
+    if (success) {
+      console.log(`\n✓ ${getProviderConfig(provider).displayName} has been added and will be included in future initialization workflows.`);
+    }
+    
+    return success;
+  }
+
+  /**
    * Display current auth status (whoami)
    */
   public whoami(): void {
@@ -622,7 +678,7 @@ export class MultiAuthManager {
 
     if (!anyAuthenticated) {
       console.log('\n  No providers authenticated.');
-      console.log('  Run "monty login" to authenticate.\n');
+      console.log('  Run "montyx login" to authenticate.\n');
       return;
     }
 

@@ -1,5 +1,5 @@
 import { join } from 'path';
-import { homedir } from 'os';
+import { homedir, platform } from 'os';
 import { existsSync, readFileSync } from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -27,12 +27,62 @@ export interface ClaudeCredentials {
 }
 
 /**
+ * Get platform-specific credential paths
+ */
+function getPlatformSpecificPaths(): string[] {
+  const paths: string[] = [];
+  const home = homedir();
+  const platformType = platform();
+
+  if (platformType === 'darwin') {
+    // macOS paths
+    paths.push(
+      join(home, 'Library', 'Application Support', 'Claude Code', 'auth.json'),
+      join(home, 'Library', 'Preferences', 'com.anthropic.claude-code.plist'),
+      join(home, 'Library', 'Preferences', 'claude-code', 'auth.json'),
+      join(home, '.config', 'claude-code', 'auth.json'),
+      join(home, '.claude', 'credentials.json'),
+      join(home, '.claude', 'auth.json'),
+      join(home, '.claude', 'token.json')
+    );
+  } else if (platformType === 'win32') {
+    // Windows paths
+    const appData = process.env.APPDATA || join(home, 'AppData', 'Roaming');
+    const localAppData = process.env.LOCALAPPDATA || join(home, 'AppData', 'Local');
+    paths.push(
+      join(appData, 'Claude Code', 'auth.json'),
+      join(localAppData, 'Claude Code', 'auth.json'),
+      join(appData, 'claude-code', 'auth.json'),
+      join(localAppData, 'claude-code', 'auth.json'),
+      join(home, '.config', 'claude-code', 'auth.json'),
+      join(home, '.claude', 'credentials.json'),
+      join(home, '.claude', 'auth.json'),
+      join(home, '.claude', 'token.json')
+    );
+  } else {
+    // Linux and other Unix-like systems
+    paths.push(
+      join(home, '.config', 'claude-code', 'auth.json'),
+      join(home, '.local', 'share', 'claude-code', 'auth.json'),
+      join(home, '.claude', 'credentials.json'),
+      join(home, '.claude', 'auth.json'),
+      join(home, '.claude', 'token.json'),
+      join(home, '.config', 'claude', 'auth.json')
+    );
+  }
+
+  return paths;
+}
+
+/**
  * Get all possible paths where Claude Code might store credentials
+ * Includes platform-specific paths and config paths
  */
 function getCredentialPaths(): string[] {
-  // Use paths from config, plus some additional fallbacks
+  // Use paths from config, plus platform-specific paths, plus additional fallbacks
   const paths = [
     ...authConfig.claudeCodePaths,
+    ...getPlatformSpecificPaths(),
     join(homedir(), '.claude', 'token.json'),              // Legacy location
     join(homedir(), '.config', 'claude', 'auth.json'),     // Alternative config location
   ];
@@ -97,10 +147,98 @@ function tryParseCredentials(filePath: string): ClaudeCredentials | null {
 }
 
 /**
+ * Try to detect credentials from macOS Keychain
+ */
+async function detectFromKeychain(): Promise<ClaudeCredentials | null> {
+  if (platform() !== 'darwin') {
+    return null;
+  }
+
+  try {
+    // Try to use security command to find generic password
+    const { stdout } = await execAsync(
+      'security find-generic-password -s "claude-code" -w 2>/dev/null || security find-generic-password -s "anthropic" -w 2>/dev/null',
+      { timeout: 3000 }
+    );
+    
+    if (stdout && stdout.trim()) {
+      const token = stdout.trim();
+      // If we got a token, try to parse it or use it directly
+      if (token.length > 20) {
+        return {
+          accessToken: token,
+          tokenType: 'Bearer',
+        };
+      }
+    }
+  } catch (error) {
+    // Keychain access failed or not found
+  }
+
+  return null;
+}
+
+/**
+ * Try to detect credentials from Windows Credential Manager
+ */
+async function detectFromCredentialManager(): Promise<ClaudeCredentials | null> {
+  if (platform() !== 'win32') {
+    return null;
+  }
+
+  try {
+    // Try to use cmdkey to list credentials
+    const { stdout } = await execAsync('cmdkey /list 2>nul', { timeout: 3000 });
+    
+    if (stdout && (stdout.includes('claude') || stdout.includes('anthropic'))) {
+      // Credential exists, but we can't extract it directly via cmdkey
+      // Fall back to file-based detection which should work on Windows
+      return null;
+    }
+  } catch (error) {
+    // Credential Manager access failed
+  }
+
+  return null;
+}
+
+/**
+ * Try to detect credentials from Linux keyring
+ */
+async function detectFromKeyring(): Promise<ClaudeCredentials | null> {
+  if (platform() === 'win32' || platform() === 'darwin') {
+    return null;
+  }
+
+  try {
+    // Try secret-tool (GNOME Keyring)
+    const { stdout } = await execAsync(
+      'secret-tool lookup service claude-code 2>/dev/null || secret-tool lookup service anthropic 2>/dev/null',
+      { timeout: 3000 }
+    );
+    
+    if (stdout && stdout.trim()) {
+      const token = stdout.trim();
+      if (token.length > 20) {
+        return {
+          accessToken: token,
+          tokenType: 'Bearer',
+        };
+      }
+    }
+  } catch (error) {
+    // Keyring access failed or not available
+  }
+
+  return null;
+}
+
+/**
  * Detects existing Claude Code subscription credentials from the local system
  * Priority:
  * 1. Use `claude config show` command (handles Keychain/Credential Manager/files automatically)
- * 2. Fall back to file-based detection
+ * 2. Try platform-specific credential storage (Keychain, Credential Manager, keyring)
+ * 3. Fall back to file-based detection across entire machine
  */
 export async function detectClaudeCodeCredentials(): Promise<ClaudeCredentials | null> {
   // Try to use Claude CLI directly - it handles all platform-specific storage (Keychain, etc.)
@@ -125,10 +263,21 @@ export async function detectClaudeCodeCredentials(): Promise<ClaudeCredentials |
       }
     }
   } catch (error) {
-    // Claude CLI not installed, not authenticated, or command failed - try file-based detection
+    // Claude CLI not installed, not authenticated, or command failed - try other methods
+  }
+
+  // Try platform-specific credential storage
+  const platformCreds = 
+    await detectFromKeychain() ||
+    await detectFromCredentialManager() ||
+    await detectFromKeyring();
+  
+  if (platformCreds && !isTokenExpired(platformCreds)) {
+    return platformCreds;
   }
 
   // Fallback: Try file-based detection for users without Claude CLI or using file storage
+  // This now scans entire machine with platform-specific paths
   return await detectFromFiles();
 }
 

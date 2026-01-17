@@ -58,10 +58,10 @@ npm run build
 # Link globally for testing
 npm link
 
-# Now you can use 'monty' command anywhere
-monty --help
-monty login
-monty init --spec="Build a todo app"
+# Now you can use 'montyx' command anywhere
+montyx --help
+montyx login
+montyx init --spec="Build a todo app"
 ```
 
 ## Multi-Provider Architecture (Phase 5)
@@ -96,31 +96,49 @@ The framework supports **multiple authentication flows** with auto-detection:
 #### Authentication Priority (per provider)
 1. Environment variable (e.g., `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`)
 2. Credentials from `~/.monty/credentials.json` (v2.0 multi-provider format)
-3. Auto-detected Claude Code credentials (Anthropic only)
+3. Auto-detected Claude Code credentials (Anthropic only) - **Enhanced machine-wide detection**
+
+#### Enhanced Subscription Detection
+
+The framework now performs **machine-wide subscription detection** across all platforms:
+
+- **macOS**: Scans Keychain, `~/Library/Application Support/Claude Code/`, `~/Library/Preferences/`
+- **Windows**: Checks Credential Manager, `%APPDATA%\Claude Code\`, `%LOCALAPPDATA%\Claude Code\`
+- **Linux**: Checks keyring, `~/.config/claude-code/`, `~/.local/share/claude-code/`
+
+Detection priority:
+1. `claude config show` command (handles all platform-specific storage automatically)
+2. Platform-specific credential storage (Keychain, Credential Manager, keyring)
+3. File-based detection across standard locations
+
+This ensures subscription credentials are detected regardless of where Claude Code stores them on the system.
 
 #### Multi-Provider Commands
 ```bash
 # Login to primary provider (Anthropic with auto-detect)
-monty login
+montyx login
 
 # Login to specific provider
-monty login --provider=openai
-monty login --provider=google
-monty login --provider=cursor
+montyx login --provider=openai
+montyx login --provider=google
+montyx login --provider=cursor
 
 # Configure all providers
-monty login --provider=all
+montyx login --provider=all
 
 # Check authentication status
-monty whoami
-monty providers
+montyx whoami
+montyx providers
 
 # Set default provider for routing
-monty --set-default=google
+montyx --set-default=google
+
+# Add provider after initialization (removes from opted-out list)
+montyx --add-provider=openai
 
 # Logout
-monty logout                    # All providers
-monty logout --provider=openai  # Specific provider
+montyx logout                    # All providers
+montyx logout --provider=openai  # Specific provider
 ```
 
 #### Key Authentication Components
@@ -231,8 +249,37 @@ if (shouldInitialize) {
 - Follows 7-step startup sequence (see `prompts/coding.md`)
 - Implements ONE feature per session
 - Tests via browser automation
-- Commits changes with `[monty]` prefix
+- Commits changes with `[montyx]` prefix
 - **Can use any provider** based on task routing
+- **Skips opted-out providers** and includes newly added providers
+
+### Provider Management and Opted-Out Providers
+
+The framework tracks which providers users skip during initial setup:
+
+**Opted-Out Provider Tracking**:
+- During `montyx login`, if a user skips a provider, it's added to `optedOutProviders` array
+- Opted-out providers are excluded from initialization and routing workflows
+- Agents check `optedOutProviders` and skip those providers automatically
+
+**Adding Providers After Initialization**:
+- Use `montyx --add-provider=NAME` to add a provider after initial setup
+- This removes the provider from `optedOutProviders` and prompts for credentials
+- Newly added providers are immediately included in future initialization workflows
+- The orchestrator will route tasks to newly added providers based on task type
+
+**Example Workflow**:
+```bash
+# Initial setup - skip OpenAI
+montyx login
+# Configure Anthropic? (y/N): y
+# Configure OpenAI? (y/N): n  # ← Opted out
+# Configure Google? (y/N): n  # ← Opted out
+
+# Later, add OpenAI
+montyx --add-provider=openai
+# OpenAI is now configured and will be used in future sessions
+```
 
 ### System Prompts
 
@@ -250,7 +297,7 @@ export const agentConfig: AgentConfig = {
   paths: { agentDir: '.agent', featureList, progressFile, ... },
   tools: { initializer: [...], coding: [...] },
   permissionMode: 'acceptEdits',
-  git: { autoCommit: true, commitMessagePrefix: '[monty]', ... },
+  git: { autoCommit: true, commitMessagePrefix: '[montyx]', ... },
   session: { maxRetries: 3, verifyBasicFunctionality: true, ... },
   features: { enableTDD: true, enableAuditLog: true, ... },
   model: { default: 'claude-3-5-sonnet', ... }
@@ -357,7 +404,7 @@ Created during initialization, consumed by coding agent:
 **`src/utils/git-utils.ts`** - Git helpers:
 - `getCurrentBranch()` - Get active branch name
 - `hasUncommittedChanges()` - Check working directory status
-- `commitChanges(message)` - Create commit with `[monty]` prefix
+- `commitChanges(message)` - Create commit with `[montyx]` prefix
 - `generateGitSummary()` - Recent commits, branch, status
 
 ### Error Recovery
@@ -408,7 +455,7 @@ Each coding session follows this pattern:
 8. **Implement feature** - Code changes to satisfy test steps
 9. **Test via browser** - Use Browser tool to verify functionality
 10. **Update feature status** - Mark `passes: true` if verified
-11. **Commit changes** - `git add .` + `git commit -m "[monty] feat-XXX: ..."`
+11. **Commit changes** - `git add .` + `git commit -m "[montyx] feat-XXX: ..."`
 12. **Log progress** - Append summary to `claude-progress.txt`
 13. **End session** - Provide summary to user
 
@@ -553,5 +600,8 @@ multiAuthManager.setEnvForChildProcess();
 
 **Breaking Changes**:
 - `~/.monty/credentials.json` now uses v2.0 format (auto-migrated)
-- CLI now requires `monty login --provider=NAME` for non-Anthropic providers
+- CLI now uses `montyx` command (primary), `monty` remains as alias for backward compatibility
+- CLI now requires `montyx login --provider=NAME` for non-Anthropic providers
+- Added `--add-provider=NAME` command to add providers after initialization
+- Enhanced subscription detection scans entire machine (Keychain, Credential Manager, keyring)
 - Auth manager singleton moved from `auth-manager.ts` to `multi-auth-manager.ts`

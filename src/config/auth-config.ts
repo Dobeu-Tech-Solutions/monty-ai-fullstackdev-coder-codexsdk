@@ -103,11 +103,13 @@ export const authConfig: AuthConfig = {
     redirectUri: 'http://localhost:9876/callback',
     scopes: ['subscription', 'agent'],
   },
-  // Claude Code credential paths for auto-detection
+  // Claude Code credential paths for auto-detection (platform-specific paths added dynamically)
+  // Base paths that work across all platforms
   claudeCodePaths: [
     join(homedir(), '.config', 'claude-code', 'auth.json'),  // Linux/Windows standard
     join(homedir(), '.claude', 'credentials.json'),          // Alternative location
     join(homedir(), '.claude', 'auth.json'),                 // Alternative location
+    join(homedir(), '.claude', 'token.json'),                // Legacy location
   ],
   validation: {
     revalidateInterval: 24 * 60 * 60 * 1000, // 24 hours
@@ -175,6 +177,7 @@ export interface MultiProviderCredentials {
   version: string;
   default_provider: ProviderName;
   providers: Partial<Record<ProviderName, ProviderCredentials>>;
+  optedOutProviders?: ProviderName[];  // Providers user skipped during initial setup
   preferences: {
     cost_tracking: boolean;
     monthly_budget_usd: number;
@@ -189,6 +192,7 @@ export const DEFAULT_MULTI_PROVIDER_CREDENTIALS: MultiProviderCredentials = {
   version: '2.0.0',
   default_provider: 'anthropic',
   providers: {},
+  optedOutProviders: [],
   preferences: {
     cost_tracking: true,
     monthly_budget_usd: 100,

@@ -13,7 +13,7 @@ Based on [Anthropic's best practices](https://www.anthropic.com/engineering/effe
 ### Prerequisites
 
 - **Node.js** >= 18.0.0
-- **Claude Code Subscription** or **Anthropic API Key** - Sign in with `monty login` or get a key at [console.anthropic.com](https://console.anthropic.com)
+- **Claude Code Subscription** or **Anthropic API Key** - Sign in with `montyx login` or get a key at [console.anthropic.com](https://console.anthropic.com)
 
 ### Windows Installation
 
@@ -26,7 +26,7 @@ winget install OpenJS.NodeJS.LTS
 npm install -g monty-autonomous-fullstack-dev-multillm
 
 # 3. Authenticate (RECOMMENDED - interactive login)
-monty login
+montyx login
 
 # 3b. Or set API key manually (PowerShell - current session)
 $env:ANTHROPIC_API_KEY="your-api-key-here"
@@ -35,7 +35,7 @@ $env:ANTHROPIC_API_KEY="your-api-key-here"
 [Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY", "your-api-key-here", "User")
 
 # 4. Verify installation
-monty --help
+montyx --help
 ```
 
 ### macOS Installation
@@ -51,7 +51,7 @@ brew install node
 npm install -g monty-autonomous-fullstack-dev-multillm
 
 # 3. Authenticate (RECOMMENDED - interactive login)
-monty login
+montyx login
 
 # 3b. Or set API key manually (current session)
 export ANTHROPIC_API_KEY="your-api-key-here"
@@ -61,7 +61,7 @@ echo 'export ANTHROPIC_API_KEY="your-api-key-here"' >> ~/.zshrc
 source ~/.zshrc
 
 # 4. Verify installation
-monty --help
+montyx --help
 ```
 
 ### Linux Installation
@@ -87,7 +87,7 @@ nvm use 20
 npm install -g monty-autonomous-fullstack-dev-multillm
 
 # 3. Authenticate (RECOMMENDED - interactive login)
-monty login
+montyx login
 
 # 3b. Or set API key manually (current session)
 export ANTHROPIC_API_KEY="your-api-key-here"
@@ -97,7 +97,7 @@ echo 'export ANTHROPIC_API_KEY="your-api-key-here"' >> ~/.bashrc
 source ~/.bashrc
 
 # 4. Verify installation
-monty --help
+montyx --help
 ```
 
 ### Run Directly with npx (No Install)
@@ -121,8 +121,8 @@ npm install --save-dev monty-autonomous-fullstack-dev-multillm
 
 # Add scripts to package.json:
 # "scripts": {
-#   "agent:init": "monty init",
-#   "agent:code": "monty code"
+#   "agent:init": "montyx init",
+#   "agent:code": "montyx code"
 # }
 ```
 
@@ -148,10 +148,10 @@ bun add -g monty-autonomous-fullstack-dev-multillm
 mkdir my-awesome-app && cd my-awesome-app
 
 # Initialize with your idea
-monty init --spec="Build a modern todo app with React, TypeScript, Tailwind CSS, and Supabase backend. Include user authentication, real-time updates, and dark mode."
+montyx init --spec="Build a modern todo app with React, TypeScript, Tailwind CSS, and Supabase backend. Include user authentication, real-time updates, and dark mode."
 
 # Continue development
-monty code
+montyx code
 ```
 
 ### Using with an Existing Codebase
@@ -161,44 +161,46 @@ monty code
 cd your-existing-project
 
 # Initialize Monty (it will detect your tech stack)
-monty init --spec="Complete the authentication system and add user dashboard"
+montyx init --spec="Complete the authentication system and add user dashboard"
 
 # The agent will analyze your codebase and create a feature list
 # Continue with incremental development
-monty code
+montyx code
 ```
 
 ### Resuming Work
 
 ```bash
 # Check project status
-monty status
+montyx status
 
 # Continue where you left off
-monty code
+montyx code
 
 # Add specific context for this session
-monty code --context="Focus on fixing the login bug in auth.ts"
+montyx code --context="Focus on fixing the login bug in auth.ts"
 ```
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `monty` | Auto-detect mode (shows help if not initialized) |
-| `monty init` | Initialize a new project with feature list |
-| `monty code` | Continue incremental development |
-| `monty status` | Show project progress and feature status |
-| `monty setup` | Set up Monty in current directory |
-| `monty --help` | Show detailed help |
+| `montyx` | Auto-detect mode (shows help if not initialized) |
+| `montyx init` | Initialize a new project with feature list |
+| `montyx code` | Continue incremental development |
+| `montyx status` | Show project progress and feature status |
+| `montyx setup` | Set up Montyx in current directory |
+| `montyx --help` | Show detailed help |
 
 ### Authentication Commands
 
 | Command | Description |
 |---------|-------------|
-| `monty login` | Sign in with Claude Code subscription or Anthropic API key |
-| `monty logout` | Sign out and clear stored credentials |
-| `monty whoami` | Show current authentication status |
+| `montyx login` | Sign in with Claude Code subscription or Anthropic API key |
+| `montyx logout` | Sign out and clear stored credentials |
+| `montyx whoami` | Show current authentication status |
+| `montyx providers` | Show all provider status |
+| `montyx --add-provider=NAME` | Add provider after initialization |
 
 ### Options
 
@@ -239,7 +241,7 @@ Monty uses a sophisticated two-agent system:
 
 ### Initializer Agent (First Run)
 
-When you first run `monty init`:
+When you first run `montyx init`:
 
 1. Analyzes your project specification
 2. Detects existing tech stack (if any)
@@ -249,7 +251,7 @@ When you first run `monty init`:
 
 ### Coding Agent (Every Session)
 
-When you run `monty code`:
+When you run `montyx code`:
 
 1. Reads progress file and git logs to understand current state
 2. Runs health checks and validates environment
@@ -432,13 +434,16 @@ monty login
 
 ```bash
 # Sign in with Claude Code subscription (OAuth) or Anthropic API key
-monty login
+montyx login
 
 # Check your authentication status
-monty whoami
+montyx whoami
 
 # Sign out when needed
-monty logout
+montyx logout
+
+# Add a provider after initialization
+montyx --add-provider=openai
 ```
 
 The interactive login will:
@@ -478,14 +483,14 @@ You need to authenticate before using Monty. Choose one of these methods:
 # First, authenticate with Claude Code
 claude login
 
-# Then let Monty auto-detect your credentials
-monty login
+# Then let Montyx auto-detect your credentials
+montyx login
 ```
 
 **Option 2: Manual API Key**:
 ```bash
 # Interactive login
-monty login
+montyx login
 # Select "API Key" method
 # Paste your key from console.anthropic.com
 
@@ -496,32 +501,32 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 **Option 3: Environment Variable** (for automation/CI):
 ```bash
 export ANTHROPIC_API_KEY="your-key-here"
-monty init --spec="your project"
+montyx init --spec="your project"
 ```
 
 #### "Token expired"
 
-Monty automatically refreshes expired tokens if you authenticated via Claude Code CLI.
+Montyx automatically refreshes expired tokens if you authenticated via Claude Code CLI.
 
 If auto-refresh fails, re-authenticate:
 ```bash
-monty logout
-monty login
+montyx logout
+montyx login
 ```
 
 #### "Could not validate credentials"
 
 Your API key may be invalid or expired:
 
-1. **For Claude Code subscription**: Run `claude login` to refresh, then `monty login`
+1. **For Claude Code subscription**: Run `claude login` to refresh, then `montyx login`
 2. **For API key**: Get a new key from [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys)
-3. **Check your key**: Run `monty whoami` to verify authentication status
+3. **Check your key**: Run `montyx whoami` to verify authentication status
 
 #### Debugging Authentication
 
 Check your current authentication status:
 ```bash
-monty whoami
+montyx whoami
 ```
 
 This command shows:
@@ -541,9 +546,9 @@ If authentication is working but agents fail:
 
 #### "Feature list not found"
 
-Run `monty init` first to initialize the project:
+Run `montyx init` first to initialize the project:
 ```bash
-monty init --spec="Build a todo app with React"
+montyx init --spec="Build a todo app with React"
 ```
 
 #### "Permission denied"
@@ -551,7 +556,7 @@ monty init --spec="Build a todo app with React"
 Ensure the CLI is executable:
 ```bash
 # Unix/Mac
-chmod +x $(which monty)
+chmod +x $(which montyx)
 
 # Windows (run as Administrator if needed)
 # No action usually required on Windows
@@ -559,10 +564,10 @@ chmod +x $(which monty)
 
 #### Agent fails to start
 
-1. Check authentication: `monty whoami`
+1. Check authentication: `montyx whoami`
 2. Verify Node.js version: `node --version` (must be >= 18.0.0)
 3. Check for error messages in the output
-4. Try running with explicit auth: `ANTHROPIC_API_KEY="your-key" monty code`
+4. Try running with explicit auth: `ANTHROPIC_API_KEY="your-key" montyx code`
 
 ## Contributing
 
