@@ -20,7 +20,7 @@ import { multiAuthManager } from "./utils/multi-auth-manager.js";
 import type { ProviderName } from "./config/provider-config.js";
 
 /**
- * Check if this is the first run (no .agent directory)
+ * Check if this is the first run (no .montyx directory)
  */
 function isFirstRun(): boolean {
   return !existsSync(agentConfig.paths.agentDir);
@@ -180,9 +180,9 @@ WORKFLOW:
   4. Multi-agent review available for code review tasks
 
 FILES:
-  ~/.monty/credentials.json    Multi-provider credentials (v2.0)
-  .agent/feature_list.json     Feature tracking (JSON)
-  .agent/claude-progress.txt   Progress log between sessions
+  ~/.montyx/credentials.json   Multi-provider credentials (v2.0)
+  .montyx/feature_list.json    Feature tracking (JSON)
+  .montyx/claude-progress.txt  Progress log between sessions
 
 EXAMPLES:
   montyx login                      # Interactive login, auto-detect Claude Code
@@ -414,14 +414,14 @@ For now, please describe what you want to build:
       // For now, we'll use a placeholder that prompts the agent to ask
       const spec = "Please ask the user for their project specification.";
       
-      // Ensure .agent directory exists
+      // Ensure .montyx directory exists
       if (!existsSync(agentConfig.paths.agentDir)) {
         mkdirSync(agentConfig.paths.agentDir, { recursive: true });
       }
       
       await runWithRetry(() => runInitializerAgent(spec));
     } else {
-      // Ensure .agent directory exists
+      // Ensure .montyx directory exists
       if (!existsSync(agentConfig.paths.agentDir)) {
         mkdirSync(agentConfig.paths.agentDir, { recursive: true });
       }

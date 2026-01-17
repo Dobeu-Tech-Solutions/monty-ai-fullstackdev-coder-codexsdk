@@ -83,7 +83,7 @@ fi
 echo "✓ All tests completed!"
 echo ""
 echo "Manual verification checklist:"
-echo "  [ ] Credentials stored in ~/.monty/credentials.json"
+echo "  [ ] Credentials stored in ~/.montyx/credentials.json"
 echo "  [ ] File permissions are secure (0600 on Unix, restricted on Windows)"
 echo "  [ ] montyx whoami shows correct authentication method"
 echo "  [ ] Agent can start and make API calls"

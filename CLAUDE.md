@@ -34,13 +34,13 @@ npm run typecheck
 npm test              # Run all tests
 npm run test:watch    # Watch mode
 
-# Clean build artifacts and .agent directory
+# Clean build artifacts and .montyx directory
 npm run clean
 ```
 
 ### Running the Agent
 ```bash
-# Auto-detect mode (checks for .agent/ directory)
+# Auto-detect mode (checks for .montyx/ directory)
 npm start
 
 # Force initialization mode
@@ -95,7 +95,7 @@ The framework supports **multiple authentication flows** with auto-detection:
 
 #### Authentication Priority (per provider)
 1. Environment variable (e.g., `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`)
-2. Credentials from `~/.monty/credentials.json` (v2.0 multi-provider format)
+2. Credentials from `~/.montyx/credentials.json` (v2.0 multi-provider format)
 3. Auto-detected Claude Code credentials (Anthropic only) - **Enhanced machine-wide detection**
 
 #### Enhanced Subscription Detection
@@ -237,7 +237,7 @@ if (shouldInitialize) {
 ```
 
 **Initializer Agent** (`src/agents/initializer.ts`):
-- Runs **once** when no `.agent/` directory exists
+- Runs **once** when no `.montyx/` directory exists
 - Allowed tools: `['Read', 'Write', 'Bash', 'Glob', 'Grep']`
 - Creates feature list, progress file, init scripts
 - Makes initial git commit
@@ -294,7 +294,7 @@ Agent behavior is defined in markdown files loaded at runtime:
 **`src/config/agent-config.ts`** - Central agent configuration:
 ```typescript
 export const agentConfig: AgentConfig = {
-  paths: { agentDir: '.agent', featureList, progressFile, ... },
+  paths: { agentDir: '.montyx', featureList, progressFile, ... },
   tools: { initializer: [...], coding: [...] },
   permissionMode: 'acceptEdits',
   git: { autoCommit: true, commitMessagePrefix: '[montyx]', ... },
@@ -315,7 +315,7 @@ export const agentConfig: AgentConfig = {
 
 **`src/config/auth-config.ts`** - Multi-provider authentication schema (v2.0)
 
-### Runtime Files (`.agent/`)
+### Runtime Files (`.montyx/`)
 
 Created during initialization, consumed by coding agent:
 
@@ -599,7 +599,7 @@ multiAuthManager.setEnvForChildProcess();
 - `tests/providers.test.ts` - Provider unit tests
 
 **Breaking Changes**:
-- `~/.monty/credentials.json` now uses v2.0 format (auto-migrated)
+- `~/.montyx/credentials.json` now uses v2.0 format (auto-migrated)
 - CLI now uses `montyx` command (primary), `monty` remains as alias for backward compatibility
 - CLI now requires `montyx login --provider=NAME` for non-Anthropic providers
 - Added `--add-provider=NAME` command to add providers after initialization

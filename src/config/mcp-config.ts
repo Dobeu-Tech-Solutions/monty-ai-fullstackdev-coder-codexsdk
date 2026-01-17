@@ -145,7 +145,7 @@ export const mcpConfig: MCPConfig = {
       width: 1280,
       height: 720,
     },
-    screenshotDir: '.agent/screenshots',
+    screenshotDir: '.montyx/screenshots',
   },
   servers: {
     playwright: playwrightServer,

@@ -79,7 +79,7 @@ Before starting, check which AI providers are available:
 1. **Check Available Providers** - Verify which AI providers are authenticated and available
 2. **Analyze** the user's project specification thoroughly
 3. **Plan** the complete feature set before writing anything
-4. **Create** the `.agent` directory if it doesn't exist
+4. **Create** the `.montyx` directory if it doesn't exist
 5. **Write** `feature_list.json` with ALL features
 6. **Write** `claude-progress.txt` with initial state
 7. **Create** init scripts for both Unix and Windows

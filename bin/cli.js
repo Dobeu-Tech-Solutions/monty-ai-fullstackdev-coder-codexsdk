@@ -67,8 +67,9 @@ const colors = {
 };
 
 // Auth configuration (Duplicate minimal config needed for CLI bootstrap)
+// Using .montyx to avoid conflicts with @dobeutechsolutions/monty-fullstack-agent
 const AUTH_CONFIG = {
-  configDir: join(homedir(), '.monty'),
+  configDir: join(homedir(), '.montyx'),
   get credentialsPath() { return join(this.configDir, 'credentials.json'); },
   envVars: {
     API_KEY: 'ANTHROPIC_API_KEY',
@@ -140,8 +141,8 @@ ${colors.bright}WORKFLOW:${colors.reset}
   3. Repeat ${colors.cyan}montyx code${colors.reset} until all features pass
 
 ${colors.bright}FILES CREATED:${colors.reset}
-  ${colors.dim}.agent/feature_list.json${colors.reset}     Feature tracking
-  ${colors.dim}.agent/claude-progress.txt${colors.reset}   Progress between sessions
+  ${colors.dim}.montyx/feature_list.json${colors.reset}     Feature tracking
+  ${colors.dim}.montyx/claude-progress.txt${colors.reset}   Progress between sessions
 
 ${colors.bright}ENVIRONMENT:${colors.reset}
   ${colors.yellow}ANTHROPIC_API_KEY${colors.reset}          Anthropic API key (or use "montyx login")
@@ -164,14 +165,14 @@ function showVersion() {
 
 function showStatus() {
   const cwd = process.cwd();
-  const agentDir = join(cwd, '.agent');
+  const agentDir = join(cwd, '.montyx');
   const featureListPath = join(agentDir, 'feature_list.json');
   const progressPath = join(agentDir, 'claude-progress.txt');
 
   showBanner();
 
   if (!existsSync(agentDir)) {
-    log('\n⚠️  No .agent directory found. Project not initialized.', colors.yellow);
+    log('\n⚠️  No .montyx directory found. Project not initialized.', colors.yellow);
     log('   Run: montyx init --spec="Your project idea..."', colors.dim);
     return;
   }
@@ -236,7 +237,7 @@ async function setupInDirectory() {
   log(`   Directory: ${cwd}`, colors.dim);
 
   // Check if already initialized
-  if (existsSync(join(cwd, '.agent'))) {
+  if (existsSync(join(cwd, '.montyx'))) {
     log('\n✅ Project already initialized!', colors.green);
     log('   Run "montyx code" to continue development.', colors.dim);
     return;
@@ -338,7 +339,7 @@ async function main() {
   const args = process.argv.slice(2);
 
   // Handle help
-  if (args.includes('--help') || args.includes('-h') || (args.length === 0 && !existsSync(join(process.cwd(), '.agent')))) {
+  if (args.includes('--help') || args.includes('-h') || (args.length === 0 && !existsSync(join(process.cwd(), '.montyx')))) {
     showHelp();
     return;
   }

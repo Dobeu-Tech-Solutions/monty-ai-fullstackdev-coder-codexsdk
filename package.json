@@ -1,15 +1,12 @@
 {
   "name": "monty-autonomous-fullstack-dev-multillm",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Multi-LLM autonomous full-stack development agent - supports Anthropic, OpenAI, Google, and Cursor",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "montyx": "./bin/cli.js",
-    "monty": "./bin/cli.js",
-    "monty-agent": "./bin/cli.js",
-    "fullstack-agent": "./bin/cli.js"
+    "montyx": "./bin/cli.js"
   },
   "scripts": {
     "start": "node dist/index.js",
@@ -21,7 +18,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "clean": "rm -rf dist .agent",
+    "clean": "rm -rf dist .montyx",
     "help": "node dist/index.js --help",
     "prepublishOnly": "npm run build",
     "prepare": "npm run build",

@@ -86,7 +86,8 @@ export interface AuthConfig {
 }
 
 // Get user's home config directory
-const configDir = join(homedir(), '.monty');
+// Using .montyx to avoid conflicts with @dobeutechsolutions/monty-fullstack-agent
+const configDir = join(homedir(), '.montyx');
 
 /**
  * Default authentication configuration

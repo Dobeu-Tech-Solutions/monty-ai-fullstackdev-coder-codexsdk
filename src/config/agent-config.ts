@@ -76,8 +76,9 @@ export interface AgentConfig {
 }
 
 // Get the project root (where the agent is invoked from)
+// Using .montyx to avoid conflicts with @dobeutechsolutions/monty-fullstack-agent
 const projectRoot = process.cwd();
-const agentDir = resolve(projectRoot, '.agent');
+const agentDir = resolve(projectRoot, '.montyx');
 
 /**
  * Default agent configuration
@@ -105,7 +106,7 @@ export const agentConfig: AgentConfig = {
   permissionMode: 'acceptEdits',
   git: {
     autoCommit: true,
-    commitMessagePrefix: '[monty]',
+    commitMessagePrefix: '[montyx]',
     preventForcePush: true,
     protectMainBranch: true,
   },
@@ -140,7 +141,7 @@ export function getAgentPath(key: keyof AgentConfig['paths']): string {
 }
 
 /**
- * Check if this is the first run (no .agent directory exists)
+ * Check if this is the first run (no .montyx directory exists)
  */
 export function isFirstRun(): boolean {
   return !existsSync(agentConfig.paths.agentDir);

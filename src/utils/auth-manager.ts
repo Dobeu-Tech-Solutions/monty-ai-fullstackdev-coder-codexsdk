@@ -201,7 +201,7 @@ export class AuthManager {
         }
 
         // If we reach here, refresh failed or not possible
-        console.error('Token expired and could not be refreshed. Please run: monty login');
+        console.error('Token expired and could not be refreshed. Please run: montyx login');
         return null;
       }
 
@@ -368,7 +368,7 @@ export class AuthManager {
         console.log('To authenticate with your Claude subscription:\n');
         console.log('  Step 1: Run "claude login" in your terminal');
         console.log('          This will open a browser to authenticate with claude.ai\n');
-        console.log('  Step 2: After authenticating, run "monty login" again');
+        console.log('  Step 2: After authenticating, run "montyx login" again');
         console.log('          Monty will automatically detect your credentials\n');
         
         const proceed = await question('Have you already run "claude login"? (y/N): ');
@@ -398,7 +398,7 @@ export class AuthManager {
         if (useApiKey.toLowerCase() === 'y') {
           method = 'api_key';
         } else {
-          console.log('\nPlease run "claude login" first, then try "monty login" again.\n');
+          console.log('\nPlease run "claude login" first, then try "montyx login" again.\n');
           rl.close();
           return false;
         }
@@ -472,8 +472,8 @@ export class AuthManager {
         console.log(`  Email:  ${email}`);
       }
       console.log(`  Key:    ${key.slice(0, 8)}...${key.slice(-4)}`);
-      console.log('\n  Credentials saved to: ~/.monty/credentials.json');
-      console.log('\n  You can now run "monty init" or "monty code" to start.\n');
+      console.log('\n  Credentials saved to: ~/.montyx/credentials.json');
+      console.log('\n  You can now run "montyx init" or "montyx code" to start.\n');
 
       rl.close();
       return true;
@@ -522,7 +522,7 @@ export class AuthManager {
 
     if (wasAuthenticated) {
       console.log('\nYou have been logged out.');
-      console.log('Your credentials have been removed from ~/.monty/credentials.json\n');
+      console.log('Your credentials have been removed from ~/.montyx/credentials.json\n');
     } else {
       console.log('\nYou were not logged in.\n');
     }
@@ -541,7 +541,7 @@ export class AuthManager {
 
     if (!info.authenticated) {
       console.log('  Status: Not authenticated\n');
-      console.log('  Run "monty login" to authenticate.\n');
+      console.log('  Run "montyx login" to authenticate.\n');
       return;
     }
 
@@ -569,7 +569,7 @@ export class AuthManager {
     if (process.env[AUTH_ENV_VARS.SUBSCRIPTION_KEY] || process.env[AUTH_ENV_VARS.API_KEY]) {
       console.log('\n  Note: Using credentials from environment variable');
     } else {
-      console.log('\n  Credentials: ~/.monty/credentials.json');
+      console.log('\n  Credentials: ~/.montyx/credentials.json');
     }
 
     console.log('');
@@ -612,7 +612,7 @@ export class AuthManager {
 
     return {
       authenticated: false,
-      message: `Not authenticated. Run "monty login" to sign in, or set ${AUTH_ENV_VARS.API_KEY} environment variable.`,
+      message: `Not authenticated. Run "montyx login" to sign in, or set ${AUTH_ENV_VARS.API_KEY} environment variable.`,
     };
   }
 }

@@ -486,7 +486,7 @@ export class MultiAuthManager {
       console.log('═══════════════════════════════════════════════════════════════\n');
       console.log(`  Key: ${key.slice(0, 8)}...${key.slice(-4)}`);
       if (email) console.log(`  Email: ${email}`);
-      console.log(`\n  Credentials saved to: ~/.monty/credentials.json\n`);
+      console.log(`\n  Credentials saved to: ~/.montyx/credentials.json\n`);
 
       rl.close();
       return true;
@@ -591,7 +591,7 @@ export class MultiAuthManager {
 
     if (wasAuthenticated) {
       console.log('\n✓ Logged out from all providers');
-      console.log('  Credentials removed from ~/.monty/credentials.json\n');
+      console.log('  Credentials removed from ~/.montyx/credentials.json\n');
     } else {
       console.log('\nNo credentials were stored.\n');
     }
@@ -683,7 +683,7 @@ export class MultiAuthManager {
     }
 
     console.log(`\n  Default Provider: ${this.credentials.default_provider}`);
-    console.log(`  Credentials: ~/.monty/credentials.json`);
+    console.log(`  Credentials: ~/.montyx/credentials.json`);
     console.log('');
   }
 

@@ -227,7 +227,7 @@ Monty uses a sophisticated two-agent system:
                                                │ Creates
                                                ▼
                                       ┌─────────────────┐
-                                      │ .agent/         │
+                                      │ .montyx/        │
                                       │ - feature_list  │
                                       │ - progress.txt  │
                                       └────────┬────────┘
@@ -277,7 +277,7 @@ Monty automatically detects and adapts to:
 
 ```
 your-project/
-└── .agent/                        # Monty's working directory
+└── .montyx/                       # Montyx's working directory
     ├── feature_list.json          # Feature tracking (immutable structure)
     ├── claude-progress.txt        # Session logs for context bridging
     ├── error-log.json             # Error history for recovery
@@ -361,9 +361,9 @@ For advanced customization, modify `src/config/agent-config.ts`:
 ```typescript
 export const agentConfig = {
   paths: {
-    agentDir: '.agent',
-    featureList: '.agent/feature_list.json',
-    progressFile: '.agent/claude-progress.txt',
+    agentDir: '.montyx',
+    featureList: '.montyx/feature_list.json',
+    progressFile: '.montyx/claude-progress.txt',
   },
   tools: {
     initializer: ['Read', 'Write', 'Bash', 'Glob'],
@@ -450,7 +450,7 @@ The interactive login will:
 1. First attempt to auto-detect Claude Code credentials
 2. If not found, offer OAuth login (opens browser) or manual API Key entry
 3. Validate your credentials
-4. Store them securely in `~/.monty/credentials.json`
+4. Store them securely in `~/.montyx/credentials.json`
 
 ### 3. Environment Variables
 
@@ -467,8 +467,8 @@ You can also authenticate using environment variables:
 When multiple credential sources exist, the priority is:
 1. `ANTHROPIC_SUBSCRIPTION_KEY` environment variable
 2. `ANTHROPIC_API_KEY` environment variable
-3. Subscription key from `~/.monty/credentials.json`
-4. API key from `~/.monty/credentials.json`
+3. Subscription key from `~/.montyx/credentials.json`
+4. API key from `~/.montyx/credentials.json`
 
 ## Troubleshooting
 
@@ -538,7 +538,7 @@ This command shows:
 If authentication is working but agents fail:
 - Verify network connectivity to api.anthropic.com
 - Check that credentials file permissions are correct:
-  - Unix/Mac: `ls -la ~/.monty/credentials.json` (should be `-rw-------`)
+  - Unix/Mac: `ls -la ~/.montyx/credentials.json` (should be `-rw-------`)
   - Windows: Only current user should have access
 - Try setting API key directly: `export ANTHROPIC_API_KEY="your-key"`
 

@@ -45,7 +45,7 @@ ${userSpec}
 
 ## INITIALIZATION CHECKLIST
 
-1. [ ] Create .agent directory
+1. [ ] Create .montyx directory
 2. [ ] Create feature_list.json with ALL features
 3. [ ] Create claude-progress.txt with initial state
 4. [ ] Create scripts/init.sh (Unix)
