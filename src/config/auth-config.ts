@@ -99,7 +99,7 @@ export const authConfig: AuthConfig = {
     // Claude.ai subscription OAuth endpoints
     authorizationUrl: 'https://claude.ai/oauth/authorize',
     tokenUrl: 'https://claude.ai/oauth/token',
-    clientId: 'monty-fullstack-agent',
+    clientId: 'monty-autonomous-fullstack-dev-multillm',
     redirectUri: 'http://localhost:9876/callback',
     scopes: ['subscription', 'agent'],
   },

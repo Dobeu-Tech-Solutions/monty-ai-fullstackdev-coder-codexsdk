@@ -12,7 +12,7 @@ echo ""
 echo "Test 1: Verify monty command is available"
 if ! command -v monty &> /dev/null; then
     echo "✗ monty command not found"
-    echo "  Please run: npm link (for local development) or npm install -g @dobeutechsolutions/monty-fullstack-agent"
+    echo "  Please run: npm link (for local development) or npm install -g monty-autonomous-fullstack-dev-multillm"
     exit 1
 fi
 echo "✓ monty command found"

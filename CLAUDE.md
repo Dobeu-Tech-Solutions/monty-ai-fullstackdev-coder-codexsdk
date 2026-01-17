@@ -4,14 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-**Monty Full-Stack Agent** - A Claude Agent SDK framework implementing Anthropic's best practices for long-running agents. The framework uses a two-agent architecture to enable incremental development across multiple context windows.
+**Monty Full-Stack Agent** - A multi-provider AI orchestration framework implementing Anthropic's best practices for long-running agents. The framework uses a two-agent architecture to enable incremental development across multiple context windows with intelligent task routing across Claude (Anthropic), Codex (OpenAI), Gemini (Google ADK), and Cursor Cloud.
 
 ### Key Capabilities
-- Takes projects from **idea to production deployment**
-- Works with **any codebase at any development stage**
-- **Auto-detects** tech stack (React, Next.js, Vue, Supabase, etc.)
-- **Incremental progress** tracking across sessions
-- **Browser automation** for end-to-end testing
+- **Multi-provider orchestration** - Routes tasks to optimal AI provider based on task type
+- **Multi-agent code review** - Parallel review by multiple AI providers with arbitration
+- **Intelligent fallback** - Automatic provider switching on failures
+- **Incremental progress tracking** - State persistence across context windows
+- **Tech stack auto-detection** - Works with any framework (React, Next.js, Vue, etc.)
+- **Browser automation** - End-to-end testing via Puppeteer MCP
 
 ## Development Commands
 
@@ -29,20 +30,24 @@ npm run build
 # Type checking only (no output files)
 npm run typecheck
 
+# Testing
+npm test              # Run all tests
+npm run test:watch    # Watch mode
+
 # Clean build artifacts and .agent directory
 npm run clean
 ```
 
 ### Running the Agent
 ```bash
+# Auto-detect mode (checks for .agent/ directory)
+npm start
+
 # Force initialization mode
 npm run agent:init
 
 # Force coding mode
 npm run agent:code
-
-# Auto-detect mode (checks for .agent/ directory)
-npm start
 ```
 
 ### Testing as Global CLI
@@ -59,45 +64,146 @@ monty login
 monty init --spec="Build a todo app"
 ```
 
-## Authentication System
+## Multi-Provider Architecture (Phase 5)
 
-The framework supports **three authentication methods** with auto-detection:
+### Supported Providers
 
-### Authentication Priority (highest to lowest)
-1. `ANTHROPIC_SUBSCRIPTION_KEY` environment variable
-2. `ANTHROPIC_API_KEY` environment variable
-3. Subscription key from `~/.monty/credentials.json`
-4. API key from `~/.monty/credentials.json`
+The framework now supports **four AI providers**:
 
-### Key Components
-- `src/utils/auth-manager.ts` - Main authentication logic, credential storage
-- `src/utils/claude-code-detector.ts` - Auto-detects Claude Code CLI credentials
-- `src/utils/oauth-server.ts` - OAuth flow for Claude subscriptions
-- `src/config/auth-config.ts` - Authentication configuration and types
+1. **Claude (Anthropic)** - Default provider, best for complex reasoning and architecture
+   - Models: Claude Sonnet 4, Claude Opus 4, Claude 3.5 Sonnet
+   - SDK: `@anthropic-ai/claude-agent-sdk`
+   - Full tool support: Read, Write, Edit, Bash, Browser, Task, etc.
 
-### How Auto-Detection Works
-1. On `monty login`, checks for existing Claude Code credentials in:
-   - Windows: `%APPDATA%\claude\credentials.json`
-   - macOS/Linux: `~/.config/claude/credentials.json`
-2. If found, imports `accessToken`, `refreshToken`, and `expiresAt`
-3. Stores in `~/.monty/credentials.json` with restricted permissions (0600)
-4. Sets `ANTHROPIC_API_KEY` environment variable for Claude Agent SDK
+2. **Codex (OpenAI)** - Best for CI/CD automation and test execution
+   - Models: GPT-4 Turbo, GPT-4o, GPT-4o Mini, O1
+   - SDK: `@openai/codex-sdk` (peer dependency)
+   - Code execution support, thread management
 
-### Authentication Commands
+3. **Gemini (Google ADK)** - Best for research and documentation with massive context
+   - Models: Gemini 2.5 Flash, Gemini 2.5 Pro, Gemini 3 Pro
+   - SDK: `@google/adk` (peer dependency)
+   - 1M-2M token context windows
+
+4. **Cursor Cloud** - Best for IDE tasks and rapid prototyping
+   - REST API only (no SDK required)
+   - Subscription-based (no per-token cost)
+
+### Authentication System
+
+The framework supports **multiple authentication flows** with auto-detection:
+
+#### Authentication Priority (per provider)
+1. Environment variable (e.g., `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`)
+2. Credentials from `~/.monty/credentials.json` (v2.0 multi-provider format)
+3. Auto-detected Claude Code credentials (Anthropic only)
+
+#### Multi-Provider Commands
 ```bash
-# Interactive login (tries auto-detect first, then prompts)
+# Login to primary provider (Anthropic with auto-detect)
 monty login
+
+# Login to specific provider
+monty login --provider=openai
+monty login --provider=google
+monty login --provider=cursor
+
+# Configure all providers
+monty login --provider=all
 
 # Check authentication status
 monty whoami
+monty providers
 
-# Logout (clears ~/.monty/credentials.json)
-monty logout
+# Set default provider for routing
+monty --set-default=google
+
+# Logout
+monty logout                    # All providers
+monty logout --provider=openai  # Specific provider
 ```
 
-## Architecture Deep Dive
+#### Key Authentication Components
+- `src/utils/multi-auth-manager.ts` - Multi-provider credential management (v2.0)
+- `src/utils/auth-manager.ts` - Legacy Anthropic-only auth (deprecated)
+- `src/utils/claude-code-detector.ts` - Auto-detects Claude Code CLI credentials
+- `src/config/auth-config.ts` - Authentication types, multi-provider schema
 
-### Two-Agent Routing System
+#### Credential File Format (v2.0)
+```json
+{
+  "version": "2.0",
+  "defaultProvider": "anthropic",
+  "providers": {
+    "anthropic": {
+      "apiKey": "sk-ant-...",
+      "method": "subscription",
+      "source": "auto_detect",
+      "expiresAt": "2025-02-01T00:00:00Z"
+    },
+    "openai": {
+      "apiKey": "sk-...",
+      "method": "api_key",
+      "source": "env_var"
+    }
+  }
+}
+```
+
+### Task Orchestrator
+
+The orchestrator (`src/orchestrator/index.ts`) routes tasks to optimal providers:
+
+**Task Classification** (`src/orchestrator/task-classifier.ts`):
+- Analyzes task description and context
+- Matches task type to provider strengths
+- Returns recommended provider + fallback chain
+
+**Task Types and Provider Preferences**:
+- `complex_reasoning` → Claude, Gemini, OpenAI
+- `architectural_decision` → Claude, Gemini
+- `ci_cd_automation` → OpenAI, Claude, Cursor
+- `test_execution` → OpenAI, Claude
+- `research` → Gemini, Claude (massive context windows)
+- `documentation` → Gemini, Claude, OpenAI
+- `ide_task` → Cursor, Claude
+- `rapid_prototyping` → Cursor, OpenAI, Claude
+- `code_review` → Multi-agent (Claude + OpenAI + Gemini)
+- `general` → Claude, OpenAI, Gemini, Cursor
+
+**Orchestrator Features**:
+- Automatic provider routing based on task type
+- Fallback to alternative providers on failure
+- Multi-agent code review with arbitration
+- Cost tracking across providers
+- Retry logic with exponential backoff
+
+### Provider System
+
+**Base Provider Interface** (`src/providers/base-provider.ts`):
+```typescript
+interface BaseProvider {
+  name: ProviderName;
+  initialize(): Promise<void>;
+  query(prompt: string, options: QueryOptions): AsyncGenerator<AgentMessage>;
+  isAvailable(): Promise<boolean>;
+  getCapabilities(): ProviderCapabilities;
+}
+```
+
+**Provider Implementations**:
+- `src/providers/anthropic-provider.ts` - Claude Agent SDK wrapper
+- `src/providers/openai-provider.ts` - OpenAI Codex SDK wrapper
+- `src/providers/google-provider.ts` - Google ADK wrapper
+- `src/providers/cursor-provider.ts` - REST API client
+
+**Provider Configuration** (`src/config/provider-config.ts`):
+- Tool mapping (standard tool names → provider-specific)
+- Model configurations (IDs, context windows, pricing)
+- Rate limits (requests/min, tokens/min, tokens/day)
+- Capability flags (streaming, vision, tool_calling, etc.)
+
+## Two-Agent Routing System
 
 The entry point (`src/index.ts`) determines which agent to run:
 
@@ -117,6 +223,7 @@ if (shouldInitialize) {
 - Allowed tools: `['Read', 'Write', 'Bash', 'Glob', 'Grep']`
 - Creates feature list, progress file, init scripts
 - Makes initial git commit
+- Always uses Claude (Anthropic) - most reliable for setup
 
 **Coding Agent** (`src/agents/coding.ts`):
 - Runs **every subsequent session**
@@ -125,6 +232,7 @@ if (shouldInitialize) {
 - Implements ONE feature per session
 - Tests via browser automation
 - Commits changes with `[monty]` prefix
+- **Can use any provider** based on task routing
 
 ### System Prompts
 
@@ -132,12 +240,11 @@ Agent behavior is defined in markdown files loaded at runtime:
 
 - `src/agents/prompts/initializer.md` - Instructs agent to create 50-200+ features, all marked `passes: false`
 - `src/agents/prompts/coding.md` - Defines 7-step startup sequence, Poka-yoke rules, browser testing workflow
-
-These prompts are loaded via `readFileSync()` and concatenated with runtime state (progress summary, feature status, health checks).
+- `src/agents/prompts/arbitrator.md` - Coordinates multi-agent review and synthesizes consensus
 
 ### Configuration Files
 
-**`src/config/agent-config.ts`** - Central configuration:
+**`src/config/agent-config.ts`** - Central agent configuration:
 ```typescript
 export const agentConfig: AgentConfig = {
   paths: { agentDir: '.agent', featureList, progressFile, ... },
@@ -150,9 +257,16 @@ export const agentConfig: AgentConfig = {
 }
 ```
 
+**`src/config/provider-config.ts`** - Multi-provider settings:
+- Provider capabilities (streaming, vision, tool_calling, etc.)
+- Tool mapping (standard names → provider-specific)
+- Model configurations (context windows, pricing)
+- Task routing rules
+- Rate limits
+
 **`src/config/mcp-config.ts`** - Browser automation settings for Puppeteer MCP server
 
-**`src/config/auth-config.ts`** - Authentication types, paths, environment variable names
+**`src/config/auth-config.ts`** - Multi-provider authentication schema (v2.0)
 
 ### Runtime Files (`.agent/`)
 
@@ -183,11 +297,23 @@ Created during initialization, consumed by coding agent:
 
 **`checkpoints/`** - Recovery checkpoints (auto-saved every 3 features by default)
 
-**`usage_log.jsonl`** - Tracks API usage per session
+**`usage_log.jsonl`** - Tracks API usage per session (multi-provider)
 
 **`audit_log.jsonl`** - Records all file modifications for security
 
 ## Utilities Reference
+
+### Multi-Provider Authentication
+**`src/utils/multi-auth-manager.ts`** - Multi-provider credential management (v2.0):
+- `loginProvider(name)` - Interactive login for specific provider
+- `loginAll()` - Configure all providers
+- `logoutProvider(name)` - Remove specific provider credentials
+- `logoutAll()` - Clear all credentials
+- `whoami()` - Show authentication status for all providers
+- `getApiKey(provider)` - Get API key with auto-refresh
+- `isAnyProviderAuthenticated()` - Check if any provider is ready
+- `setDefaultProvider(name)` - Set routing default
+- `setEnvForChildProcess()` - Inject API keys into environment
 
 ### Feature Management
 **`src/utils/feature-list.ts`** - Feature CRUD with Poka-yoke validation:
@@ -286,6 +412,40 @@ Each coding session follows this pattern:
 12. **Log progress** - Append summary to `claude-progress.txt`
 13. **End session** - Provide summary to user
 
+## Testing
+
+### Test Structure
+```
+tests/
+├── auth.test.ts                    # Legacy auth tests
+├── auth-subscription.test.ts       # Subscription auth flow
+├── multi-auth.test.ts              # Multi-provider auth
+├── cli.test.ts                     # CLI argument parsing
+├── providers.test.ts               # Provider unit tests
+├── orchestrator.test.ts            # Task routing tests
+├── sdk-features.test.ts            # SDK compatibility tests
+├── e2e/
+│   ├── browser-auth.test.ts        # Browser-based OAuth
+│   └── coding-agent.test.ts        # End-to-end agent execution
+└── integration/
+    └── providers.test.ts           # Multi-provider integration
+```
+
+### Running Tests
+```bash
+# All tests
+npm test
+
+# Watch mode
+npm run test:watch
+
+# Specific test file
+npx vitest run tests/multi-auth.test.ts
+
+# E2E tests (requires credentials)
+npx vitest run tests/e2e/
+```
+
 ## Publishing to npm
 
 ```bash
@@ -310,39 +470,88 @@ The package is published as `@dobeutechsolutions/monty-fullstack-agent` under CC
 
 ## Key Implementation Patterns
 
-### Agent SDK Usage
+### Multi-Provider Query Pattern
 ```typescript
-import { query } from "@anthropic-ai/claude-agent-sdk";
+import { getOrchestrator } from './orchestrator';
 
-for await (const message of query({
-  prompt: buildCodingPrompt(),
-  options: {
-    allowedTools: agentConfig.tools.coding,
-    permissionMode: agentConfig.permissionMode,
-  },
+const orchestrator = await getOrchestrator({
+  routingEnabled: true,
+  multiAgentReviewEnabled: true,
+  fallbackEnabled: true,
+});
+
+for await (const message of orchestrator.execute(task, {
+  context: { isCodeReview: true },
+  allowedTools: agentConfig.tools.coding,
 })) {
   // Handle streaming responses
-}
-```
-
-### Retry Logic
-```typescript
-async function runWithRetry(fn, maxRetries = 3) {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      await fn();
-      return;
-    } catch (error) {
-      if (attempt === maxRetries) throw error;
-      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-    }
+  if (message.type === 'result') {
+    // Task complete
   }
 }
 ```
 
-### Environment Variable Injection
-The framework sets `ANTHROPIC_API_KEY` for child processes before spawning agents:
+### Provider-Specific Query Pattern
 ```typescript
-authManager.setEnvForChildProcess();
-// Now Claude Agent SDK can access credentials
+import { getProvider } from './providers';
+
+const claude = getProvider('anthropic');
+for await (const message of claude.query(prompt, options)) {
+  // Direct Claude query
+}
 ```
+
+### Retry Logic with Provider Fallback
+```typescript
+async function runWithRetry(fn, maxRetries = 3) {
+  const providers = ['anthropic', 'openai', 'google'];
+
+  for (const provider of providers) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await fn(provider);
+        return;
+      } catch (error) {
+        if (attempt === maxRetries) {
+          // Try next provider
+          continue;
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      }
+    }
+  }
+
+  throw new Error('All providers and retries exhausted');
+}
+```
+
+### Environment Variable Injection
+The framework sets API keys for all authenticated providers:
+```typescript
+multiAuthManager.setEnvForChildProcess();
+// Sets ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY, etc.
+```
+
+## Recent Changes (Phase 5)
+
+**Multi-Provider Orchestration** (v1.0.3):
+- Added support for OpenAI Codex, Google ADK, Cursor Cloud
+- Implemented task-based routing with automatic fallback
+- Created multi-agent code review coordinator
+- Migrated to v2.0 credential format
+- Added provider-specific CLI commands
+- Comprehensive test coverage for all providers
+
+**Files Added**:
+- `src/orchestrator/` - Task orchestration system
+- `src/providers/` - Provider abstraction layer
+- `src/config/provider-config.ts` - Multi-provider configuration
+- `src/utils/multi-auth-manager.ts` - v2.0 credential management
+- `tests/multi-auth.test.ts` - Multi-provider auth tests
+- `tests/orchestrator.test.ts` - Task routing tests
+- `tests/providers.test.ts` - Provider unit tests
+
+**Breaking Changes**:
+- `~/.monty/credentials.json` now uses v2.0 format (auto-migrated)
+- CLI now requires `monty login --provider=NAME` for non-Anthropic providers
+- Auth manager singleton moved from `auth-manager.ts` to `multi-auth-manager.ts`

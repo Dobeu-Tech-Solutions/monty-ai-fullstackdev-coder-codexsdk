@@ -18,10 +18,10 @@
  *   monty --help                - Show help
  *
  * Install globally:
- *   npm install -g monty-fullstack-agent
+ *   npm install -g monty-autonomous-fullstack-dev-multillm
  *
  * Or run directly:
- *   npx monty-fullstack-agent
+ *   npx monty-autonomous-fullstack-dev-multillm
  */
 
 import { fileURLToPath } from 'url';
@@ -132,7 +132,7 @@ ${colors.bright}QUICK START:${colors.reset}
   ${colors.green}monty code${colors.reset}
 
   ${colors.dim}# Or use npx directly${colors.reset}
-  ${colors.green}npx monty-fullstack-agent init --spec="Your project idea..."${colors.reset}
+  ${colors.green}npx monty-autonomous-fullstack-dev-multillm init --spec="Your project idea..."${colors.reset}
 
 ${colors.bright}WORKFLOW:${colors.reset}
   1. ${colors.cyan}monty init${colors.reset} - Analyzes your spec and creates feature list
@@ -156,9 +156,9 @@ function showVersion() {
   const packagePath = join(__dirname, '..', 'package.json');
   try {
     const pkg = JSON.parse(readFileSync(packagePath, 'utf-8'));
-    console.log(`monty-fullstack-agent v${pkg.version}`);
+    console.log(`monty-autonomous-fullstack-dev-multillm v${pkg.version}`);
   } catch {
-    console.log('monty-fullstack-agent v1.0.0');
+    console.log('monty-autonomous-fullstack-dev-multillm v1.0.0');
   }
 }
 

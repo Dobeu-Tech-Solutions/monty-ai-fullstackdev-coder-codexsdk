@@ -1,550 +1,516 @@
 /**
- * Hooks Manager (Features A2, B4)
- * Security guards, TDD enforcement, audit logging, notifications
+ * Hooks Manager
+ * Implements lifecycle hooks for the Claude Agent SDK.
+ * Hooks allow customization of agent behavior at key points.
  *
  * Copyright (c) 2025 Dobeu Tech Solutions LLC
  * Licensed under CC BY-NC 4.0
  */
 
-import { existsSync, readFileSync, writeFileSync, appendFileSync } from 'fs';
-import { join, dirname, basename } from 'path';
+import { agentConfig } from '../config/agent-config.js';
 
 /**
  * Hook event types
  */
-export type HookEventType =
-  | 'PreToolUse'
-  | 'PostToolUse'
-  | 'PostToolUseFailure'
-  | 'UserPromptSubmit'
-  | 'Stop'
-  | 'SubagentStop'
-  | 'PreCompact'
-  | 'SessionStart'
-  | 'SessionEnd';
+export type HookEvent =
+  | 'session.start'
+  | 'session.end'
+  | 'query.before'
+  | 'query.after'
+  | 'tool.before'
+  | 'tool.after'
+  | 'file.read'
+  | 'file.write'
+  | 'file.edit'
+  | 'error.caught'
+  | 'feature.start'
+  | 'feature.complete'
+  | 'feature.fail'
+  | 'checkpoint.create'
+  | 'checkpoint.restore'
+  | 'git.commit'
+  | 'browser.navigate'
+  | 'browser.action';
 
 /**
- * Hook result actions
- */
-export type HookAction = 'allow' | 'deny' | 'continue' | 'modify';
-
-/**
- * Hook input data
- */
-export interface HookInput {
-  hook_event_name: HookEventType;
-  tool_name?: string;
-  tool_input?: Record<string, unknown>;
-  session_id?: string;
-  timestamp: string;
-}
-
-/**
- * Hook result
- */
-export interface HookResult {
-  action: HookAction;
-  reason?: string;
-  modified_input?: Record<string, unknown>;
-  inject_message?: string;
-}
-
-/**
- * Hook function signature
- */
-export type HookFunction = (input: HookInput, context: HookContext) => Promise<HookResult>;
-
-/**
- * Hook context
+ * Hook context passed to hook handlers
  */
 export interface HookContext {
-  project_root: string;
-  agent_dir: string;
-  session_id: string;
-  feature_in_progress?: string;
+  event: HookEvent;
+  timestamp: number;
+  sessionId?: string;
+  featureId?: string;
+  data?: Record<string, unknown>;
 }
 
 /**
- * Hook matcher configuration
+ * Hook handler function type
  */
-export interface HookMatcher {
-  matcher: string | RegExp;
-  hooks: HookFunction[];
+export type HookHandler = (context: HookContext) => Promise<HookResult> | HookResult;
+
+/**
+ * Hook result that can modify agent behavior
+ */
+export interface HookResult {
+  continue: boolean;
+  modified?: Record<string, unknown>;
+  message?: string;
+  warnings?: string[];
+  block?: {
+    reason: string;
+    suggestion?: string;
+  };
 }
 
 /**
- * Hooks configuration
+ * Registered hook with metadata
  */
-export interface HooksConfig {
-  PreToolUse?: HookMatcher[];
-  PostToolUse?: HookMatcher[];
-  PostToolUseFailure?: HookMatcher[];
-  UserPromptSubmit?: HookFunction[];
-  Stop?: HookFunction[];
-  SubagentStop?: HookFunction[];
-  PreCompact?: HookFunction[];
-  SessionStart?: HookFunction[];
-  SessionEnd?: HookFunction[];
+interface RegisteredHook {
+  id: string;
+  event: HookEvent;
+  handler: HookHandler;
+  priority: number;
+  name: string;
+  description?: string;
+  enabled: boolean;
 }
 
 /**
- * Audit log entry
+ * Security hook configuration
  */
-export interface AuditLogEntry {
-  timestamp: string;
-  session_id: string;
-  event: HookEventType;
-  tool?: string;
-  action: HookAction;
-  details: string;
+export interface SecurityHookConfig {
+  blockSensitiveFiles: boolean;
+  sensitivePatterns: RegExp[];
+  blockDangerousCommands: boolean;
+  dangerousCommandPatterns: RegExp[];
+  requireConfirmation: boolean;
+  confirmationPatterns: RegExp[];
+  auditAllActions: boolean;
 }
 
-// ============================================================================
-// Security Hooks
-// ============================================================================
-
 /**
- * Block dangerous bash commands
+ * Default security hook configuration
  */
-export const blockDangerousCommands: HookFunction = async (input, _context) => {
-  if (input.tool_name !== 'Bash') {
-    return { action: 'continue' };
-  }
-
-  const command = (input.tool_input?.command as string) || '';
-
-  // Dangerous patterns
-  const dangerousPatterns = [
-    /rm\s+-rf\s+\/(?!\w)/,           // rm -rf / (but allow rm -rf /path)
-    /rm\s+-rf\s+~\//,                 // rm -rf ~/
-    /rm\s+-rf\s+\$HOME/,              // rm -rf $HOME
-    />\s*\/dev\/sd[a-z]/,             // Write to disk devices
-    /mkfs\./,                          // Format filesystems
-    /dd\s+if=.*of=\/dev/,             // dd to devices
-    /:(){ :|:& };:/,                  // Fork bomb
-    /wget.*\|\s*sh/,                  // Download and execute
-    /curl.*\|\s*sh/,                  // Download and execute
-    /chmod\s+777\s+\//,               // chmod 777 on root
-    /chown\s+-R\s+.*\s+\//,           // chown -R on root
-  ];
-
-  for (const pattern of dangerousPatterns) {
-    if (pattern.test(command)) {
-      return {
-        action: 'deny',
-        reason: `Dangerous command blocked: matches pattern ${pattern.toString()}`,
-      };
-    }
-  }
-
-  // Block commands that modify system files
-  const systemPaths = ['/etc/', '/usr/', '/bin/', '/sbin/', '/boot/', '/sys/', '/proc/'];
-  for (const path of systemPaths) {
-    if (command.includes(`> ${path}`) || command.includes(`rm ${path}`)) {
-      return {
-        action: 'deny',
-        reason: `Cannot modify system path: ${path}`,
-      };
-    }
-  }
-
-  return { action: 'continue' };
-};
-
-/**
- * Block writes to protected files
- */
-export const blockProtectedFiles: HookFunction = async (input, _context) => {
-  if (!['Write', 'Edit'].includes(input.tool_name || '')) {
-    return { action: 'continue' };
-  }
-
-  const filePath = (input.tool_input?.file_path as string) || '';
-
-  // Protected patterns
-  const protectedPatterns = [
-    /\.env\.production$/,
-    /\.env\.local$/,
-    /credentials\.json$/,
-    /secrets\.json$/,
+export const DEFAULT_SECURITY_CONFIG: SecurityHookConfig = {
+  blockSensitiveFiles: true,
+  sensitivePatterns: [
+    /\.env$/,
+    /\.env\.\w+$/,
+    /credentials\.(json|yaml|yml)$/,
+    /secrets?\.(json|yaml|yml)$/,
+    /private[_-]?key/i,
+    /\.pem$/,
+    /\.key$/,
+    /id_rsa/,
     /\.ssh\//,
-    /\.gnupg\//,
-    /\.aws\/credentials$/,
-    /\.kube\/config$/,
-  ];
-
-  for (const pattern of protectedPatterns) {
-    if (pattern.test(filePath)) {
-      return {
-        action: 'deny',
-        reason: `Cannot modify protected file: ${filePath}`,
-      };
-    }
-  }
-
-  return { action: 'continue' };
+  ],
+  blockDangerousCommands: true,
+  dangerousCommandPatterns: [
+    /rm\s+-rf\s+\//,
+    /rm\s+-rf\s+~\//,
+    /rm\s+-rf\s+\.\.\//,
+    /:\s*>\s*[^>]/,
+    /mkfs\./,
+    /dd\s+if=/,
+    /chmod\s+777/,
+    /curl\s+.*\|\s*(ba)?sh/,
+    /wget\s+.*\|\s*(ba)?sh/,
+  ],
+  requireConfirmation: false,
+  confirmationPatterns: [
+    /drop\s+database/i,
+    /drop\s+table/i,
+    /truncate/i,
+    /delete\s+from/i,
+    /git\s+reset\s+--hard/,
+    /git\s+push\s+.*--force/,
+  ],
+  auditAllActions: true,
 };
 
 /**
- * Prevent accidental git force push
+ * Hooks Manager class
  */
-export const preventForcePush: HookFunction = async (input, _context) => {
-  if (input.tool_name !== 'Bash') {
-    return { action: 'continue' };
-  }
+export class HooksManager {
+  private hooks: Map<HookEvent, RegisteredHook[]> = new Map();
+  private securityConfig: SecurityHookConfig;
+  private hookIdCounter = 0;
+  private auditLog: HookContext[] = [];
+  private enabled: boolean;
 
-  const command = (input.tool_input?.command as string) || '';
+  constructor(securityConfig?: Partial<SecurityHookConfig>) {
+    this.securityConfig = { ...DEFAULT_SECURITY_CONFIG, ...securityConfig };
+    this.enabled = agentConfig.features.enableSecurityHooks;
 
-  if (/git\s+push\s+.*(-f|--force)/.test(command)) {
-    // Check if pushing to main/master
-    if (/\s+(main|master)\s*$/.test(command) || /origin\s+(main|master)/.test(command)) {
-      return {
-        action: 'deny',
-        reason: 'Force push to main/master is blocked. Use a feature branch instead.',
-      };
+    // Register default security hooks
+    if (this.enabled) {
+      this.registerSecurityHooks();
     }
   }
 
-  return { action: 'continue' };
-};
-
-// ============================================================================
-// TDD Guard Hooks (Feature B4)
-// ============================================================================
-
-/**
- * Enforce Test-Driven Development
- */
-export const tddGuard: HookFunction = async (input, context) => {
-  if (input.tool_name !== 'Edit') {
-    return { action: 'continue' };
+  /**
+   * Check if hooks are enabled
+   */
+  isEnabled(): boolean {
+    return this.enabled;
   }
 
-  const filePath = (input.tool_input?.file_path as string) || '';
-
-  // Check if this is an implementation file (not a test)
-  const isImplementationFile =
-    /\.(ts|tsx|js|jsx)$/.test(filePath) &&
-    !filePath.includes('.test.') &&
-    !filePath.includes('.spec.') &&
-    !filePath.includes('__tests__') &&
-    !filePath.includes('/test/');
-
-  if (!isImplementationFile) {
-    return { action: 'continue' };
+  /**
+   * Enable or disable hooks
+   */
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
   }
 
-  // Check if corresponding test file exists
-  const testPatterns = [
-    filePath.replace(/\.(ts|tsx|js|jsx)$/, '.test.$1'),
-    filePath.replace(/\.(ts|tsx|js|jsx)$/, '.spec.$1'),
-    filePath.replace(/\/src\//, '/__tests__/').replace(/\.(ts|tsx|js|jsx)$/, '.test.$1'),
-  ];
+  /**
+   * Generate unique hook ID
+   */
+  private generateId(): string {
+    return `hook_${++this.hookIdCounter}_${Date.now()}`;
+  }
 
-  let testExists = false;
-  for (const testPath of testPatterns) {
-    const fullTestPath = join(context.project_root, testPath);
-    if (existsSync(fullTestPath)) {
-      testExists = true;
-      break;
+  /**
+   * Register a hook
+   */
+  register(
+    event: HookEvent,
+    handler: HookHandler,
+    options?: {
+      name?: string;
+      description?: string;
+      priority?: number;
+      enabled?: boolean;
     }
+  ): string {
+    const hookId = this.generateId();
+
+    const registeredHook: RegisteredHook = {
+      id: hookId,
+      event,
+      handler,
+      priority: options?.priority ?? 50,
+      name: options?.name ?? `Hook ${hookId}`,
+      description: options?.description,
+      enabled: options?.enabled ?? true,
+    };
+
+    if (!this.hooks.has(event)) {
+      this.hooks.set(event, []);
+    }
+
+    const eventHooks = this.hooks.get(event)!;
+    eventHooks.push(registeredHook);
+
+    // Sort by priority (higher priority runs first)
+    eventHooks.sort((a, b) => b.priority - a.priority);
+
+    return hookId;
   }
 
-  // Also check for test directory
-  const testDirPath = join(context.project_root, 'test', basename(filePath).replace(/\.(ts|tsx|js|jsx)$/, '.test.$1'));
-  if (existsSync(testDirPath)) {
-    testExists = true;
+  /**
+   * Unregister a hook
+   */
+  unregister(hookId: string): boolean {
+    for (const [event, hooks] of this.hooks.entries()) {
+      const index = hooks.findIndex(h => h.id === hookId);
+      if (index !== -1) {
+        hooks.splice(index, 1);
+        return true;
+      }
+    }
+    return false;
   }
 
-  if (!testExists) {
+  /**
+   * Enable a hook
+   */
+  enable(hookId: string): boolean {
+    for (const hooks of this.hooks.values()) {
+      const hook = hooks.find(h => h.id === hookId);
+      if (hook) {
+        hook.enabled = true;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Disable a hook
+   */
+  disable(hookId: string): boolean {
+    for (const hooks of this.hooks.values()) {
+      const hook = hooks.find(h => h.id === hookId);
+      if (hook) {
+        hook.enabled = false;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Trigger hooks for an event
+   */
+  async trigger(event: HookEvent, data?: Record<string, unknown>): Promise<HookResult> {
+    if (!this.enabled) {
+      return { continue: true };
+    }
+
+    const context: HookContext = {
+      event,
+      timestamp: Date.now(),
+      data,
+    };
+
+    // Audit logging
+    if (this.securityConfig.auditAllActions) {
+      this.auditLog.push(context);
+    }
+
+    const eventHooks = this.hooks.get(event) || [];
+    const enabledHooks = eventHooks.filter(h => h.enabled);
+
+    const warnings: string[] = [];
+    let modified: Record<string, unknown> = {};
+
+    for (const hook of enabledHooks) {
+      try {
+        const result = await hook.handler(context);
+
+        if (!result.continue) {
+          return result;
+        }
+
+        if (result.warnings) {
+          warnings.push(...result.warnings);
+        }
+
+        if (result.modified) {
+          modified = { ...modified, ...result.modified };
+        }
+      } catch (error) {
+        console.error(`Hook ${hook.name} failed:`, error);
+        warnings.push(`Hook ${hook.name} threw an error`);
+      }
+    }
+
     return {
-      action: 'deny',
-      reason: `TDD Guard: Write tests first! No test file found for ${filePath}. Create a test file before modifying implementation.`,
-      inject_message: `[TDD REMINDER] Before editing ${basename(filePath)}, please create a corresponding test file.`,
+      continue: true,
+      modified: Object.keys(modified).length > 0 ? modified : undefined,
+      warnings: warnings.length > 0 ? warnings : undefined,
     };
   }
 
-  return { action: 'continue' };
-};
+  /**
+   * Register default security hooks
+   */
+  private registerSecurityHooks(): void {
+    // File read security hook
+    this.register(
+      'file.read',
+      async (context) => {
+        const filePath = context.data?.path as string;
+        if (!filePath) return { continue: true };
 
-/**
- * Relaxed TDD guard (warns but doesn't block)
- */
-export const tddGuardWarn: HookFunction = async (input, context) => {
-  const result = await tddGuard(input, context);
-
-  if (result.action === 'deny') {
-    return {
-      action: 'continue',
-      inject_message: `[TDD WARNING] ${result.reason}`,
-    };
-  }
-
-  return result;
-};
-
-// ============================================================================
-// Audit Logging Hooks
-// ============================================================================
-
-/**
- * Log all tool usage
- */
-export const auditToolUsage: HookFunction = async (input, context) => {
-  const logPath = join(context.agent_dir, 'audit_log.jsonl');
-
-  const entry: AuditLogEntry = {
-    timestamp: input.timestamp,
-    session_id: context.session_id,
-    event: input.hook_event_name,
-    tool: input.tool_name,
-    action: 'allow',
-    details: JSON.stringify(input.tool_input || {}),
-  };
-
-  try {
-    appendFileSync(logPath, JSON.stringify(entry) + '\n');
-  } catch {
-    // Silently fail - don't block on logging errors
-  }
-
-  return { action: 'continue' };
-};
-
-/**
- * Log file changes
- */
-export const auditFileChanges: HookFunction = async (input, context) => {
-  if (!['Write', 'Edit'].includes(input.tool_name || '')) {
-    return { action: 'continue' };
-  }
-
-  const logPath = join(context.agent_dir, 'file_changes.log');
-  const filePath = input.tool_input?.file_path as string;
-  const action = input.tool_name === 'Write' ? 'WRITE' : 'EDIT';
-
-  const logEntry = `[${input.timestamp}] ${action}: ${filePath}\n`;
-
-  try {
-    appendFileSync(logPath, logEntry);
-  } catch {
-    // Silently fail
-  }
-
-  return { action: 'continue' };
-};
-
-// ============================================================================
-// Session Hooks
-// ============================================================================
-
-/**
- * Initialize session logging
- */
-export const sessionStartLogger: HookFunction = async (input, context) => {
-  const logPath = join(context.agent_dir, 'sessions.log');
-  const entry = `[${input.timestamp}] SESSION START: ${context.session_id}\n`;
-
-  try {
-    appendFileSync(logPath, entry);
-  } catch {
-    // Silently fail
-  }
-
-  return { action: 'continue' };
-};
-
-/**
- * Finalize session logging
- */
-export const sessionEndLogger: HookFunction = async (input, context) => {
-  const logPath = join(context.agent_dir, 'sessions.log');
-  const entry = `[${input.timestamp}] SESSION END: ${context.session_id}\n`;
-
-  try {
-    appendFileSync(logPath, entry);
-  } catch {
-    // Silently fail
-  }
-
-  return { action: 'continue' };
-};
-
-// ============================================================================
-// Hook Runner
-// ============================================================================
-
-/**
- * Run hooks for a specific event
- */
-export async function runHooks(
-  event: HookEventType,
-  input: Omit<HookInput, 'hook_event_name' | 'timestamp'>,
-  context: HookContext,
-  config: HooksConfig
-): Promise<HookResult> {
-  const fullInput: HookInput = {
-    ...input,
-    hook_event_name: event,
-    timestamp: new Date().toISOString(),
-  };
-
-  // Get hooks for this event
-  const eventHooks = config[event];
-  if (!eventHooks || eventHooks.length === 0) {
-    return { action: 'continue' };
-  }
-
-  // For tool events, filter by matcher
-  if (['PreToolUse', 'PostToolUse', 'PostToolUseFailure'].includes(event)) {
-    const matchers = eventHooks as HookMatcher[];
-
-    for (const matcher of matchers) {
-      const toolName = input.tool_name || '';
-      const matches =
-        typeof matcher.matcher === 'string'
-          ? new RegExp(matcher.matcher).test(toolName)
-          : matcher.matcher.test(toolName);
-
-      if (matches) {
-        for (const hook of matcher.hooks) {
-          const result = await hook(fullInput, context);
-
-          if (result.action === 'deny') {
-            return result;
-          }
-
-          if (result.action === 'modify' && result.modified_input) {
-            fullInput.tool_input = result.modified_input;
+        for (const pattern of this.securityConfig.sensitivePatterns) {
+          if (pattern.test(filePath)) {
+            return {
+              continue: false,
+              block: {
+                reason: `Blocked read of sensitive file: ${filePath}`,
+                suggestion: 'Use environment variables for sensitive data',
+              },
+            };
           }
         }
-      }
-    }
-  } else {
-    // For non-tool events, run all hooks
-    const hooks = eventHooks as HookFunction[];
 
-    for (const hook of hooks) {
-      const result = await hook(fullInput, context);
+        return { continue: true };
+      },
+      { name: 'Sensitive File Read Block', priority: 100 }
+    );
 
-      if (result.action === 'deny') {
-        return result;
-      }
-    }
+    // File write security hook
+    this.register(
+      'file.write',
+      async (context) => {
+        const filePath = context.data?.path as string;
+        if (!filePath) return { continue: true };
+
+        for (const pattern of this.securityConfig.sensitivePatterns) {
+          if (pattern.test(filePath)) {
+            return {
+              continue: false,
+              block: {
+                reason: `Blocked write to sensitive file: ${filePath}`,
+                suggestion: 'Use environment variables for sensitive data',
+              },
+            };
+          }
+        }
+
+        return { continue: true };
+      },
+      { name: 'Sensitive File Write Block', priority: 100 }
+    );
+
+    // Command execution security hook
+    this.register(
+      'tool.before',
+      async (context) => {
+        const toolName = context.data?.tool as string;
+        const command = context.data?.command as string;
+
+        if (toolName !== 'Bash' || !command) {
+          return { continue: true };
+        }
+
+        // Check for dangerous commands
+        if (this.securityConfig.blockDangerousCommands) {
+          for (const pattern of this.securityConfig.dangerousCommandPatterns) {
+            if (pattern.test(command)) {
+              return {
+                continue: false,
+                block: {
+                  reason: `Blocked dangerous command: ${command}`,
+                  suggestion: 'Review command for safety before execution',
+                },
+              };
+            }
+          }
+        }
+
+        // Check for commands requiring confirmation
+        if (this.securityConfig.requireConfirmation) {
+          for (const pattern of this.securityConfig.confirmationPatterns) {
+            if (pattern.test(command)) {
+              return {
+                continue: true,
+                warnings: [`Command requires user confirmation: ${command}`],
+              };
+            }
+          }
+        }
+
+        return { continue: true };
+      },
+      { name: 'Dangerous Command Block', priority: 100 }
+    );
   }
 
-  return { action: 'continue' };
+  /**
+   * Get audit log
+   */
+  getAuditLog(): HookContext[] {
+    return [...this.auditLog];
+  }
+
+  /**
+   * Clear audit log
+   */
+  clearAuditLog(): void {
+    this.auditLog = [];
+  }
+
+  /**
+   * Get all registered hooks
+   */
+  listHooks(): Array<{ event: HookEvent; name: string; enabled: boolean; priority: number }> {
+    const result: Array<{ event: HookEvent; name: string; enabled: boolean; priority: number }> = [];
+
+    for (const [event, hooks] of this.hooks.entries()) {
+      for (const hook of hooks) {
+        result.push({
+          event,
+          name: hook.name,
+          enabled: hook.enabled,
+          priority: hook.priority,
+        });
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Get hooks summary
+   */
+  getSummary(): string {
+    const total = this.listHooks().length;
+    const enabled = this.listHooks().filter(h => h.enabled).length;
+    const auditCount = this.auditLog.length;
+
+    return `Hooks: ${enabled}/${total} enabled, ${auditCount} audit entries`;
+  }
+
+  /**
+   * Update security configuration
+   */
+  updateSecurityConfig(config: Partial<SecurityHookConfig>): void {
+    this.securityConfig = { ...this.securityConfig, ...config };
+  }
+
+  /**
+   * Get current security configuration
+   */
+  getSecurityConfig(): SecurityHookConfig {
+    return { ...this.securityConfig };
+  }
 }
 
-// ============================================================================
-// Default Configuration
-// ============================================================================
+// Convenience functions for common hooks
 
 /**
- * Create default hooks configuration
+ * Create a logging hook
  */
-export function createDefaultHooksConfig(options: {
-  enableTDD?: boolean;
-  enableAudit?: boolean;
-  enableSecurity?: boolean;
-  strictTDD?: boolean;
-} = {}): HooksConfig {
-  const {
-    enableTDD = true,
-    enableAudit = true,
-    enableSecurity = true,
-    strictTDD = false,
-  } = options;
-
-  const config: HooksConfig = {
-    PreToolUse: [],
-    PostToolUse: [],
-    SessionStart: [sessionStartLogger],
-    SessionEnd: [sessionEndLogger],
+export function createLoggingHook(
+  logFn: (context: HookContext) => void
+): HookHandler {
+  return async (context) => {
+    logFn(context);
+    return { continue: true };
   };
-
-  // Security hooks
-  if (enableSecurity) {
-    config.PreToolUse!.push({
-      matcher: 'Bash',
-      hooks: [blockDangerousCommands, preventForcePush],
-    });
-
-    config.PreToolUse!.push({
-      matcher: 'Write|Edit',
-      hooks: [blockProtectedFiles],
-    });
-  }
-
-  // TDD hooks
-  if (enableTDD) {
-    config.PreToolUse!.push({
-      matcher: 'Edit',
-      hooks: [strictTDD ? tddGuard : tddGuardWarn],
-    });
-  }
-
-  // Audit hooks
-  if (enableAudit) {
-    config.PostToolUse!.push({
-      matcher: '.*',
-      hooks: [auditToolUsage, auditFileChanges],
-    });
-  }
-
-  return config;
 }
 
 /**
- * Load audit log
+ * Create a validation hook
  */
-export function loadAuditLog(agentDir: string, limit: number = 100): AuditLogEntry[] {
-  const logPath = join(agentDir, 'audit_log.jsonl');
-
-  if (!existsSync(logPath)) {
-    return [];
-  }
-
-  try {
-    const content = readFileSync(logPath, 'utf-8');
-    const lines = content.trim().split('\n').filter(Boolean);
-    const entries = lines.map(line => JSON.parse(line) as AuditLogEntry);
-
-    return entries.slice(-limit);
-  } catch {
-    return [];
-  }
+export function createValidationHook(
+  validate: (context: HookContext) => boolean | string
+): HookHandler {
+  return async (context) => {
+    const result = validate(context);
+    if (result === true) {
+      return { continue: true };
+    }
+    return {
+      continue: false,
+      block: {
+        reason: typeof result === 'string' ? result : 'Validation failed',
+      },
+    };
+  };
 }
 
 /**
- * Get hooks summary for SDK options
+ * Create a transformation hook
  */
-export function getHooksForSDK(config: HooksConfig): object {
-  // Convert our config to SDK format
-  const sdkHooks: Record<string, unknown[]> = {};
-
-  if (config.PreToolUse) {
-    sdkHooks.PreToolUse = config.PreToolUse.map(m => ({
-      matcher: typeof m.matcher === 'string' ? m.matcher : m.matcher.source,
-      hooks: m.hooks.map(h => h.name || 'anonymous'),
-    }));
-  }
-
-  return sdkHooks;
+export function createTransformationHook(
+  transform: (context: HookContext) => Record<string, unknown>
+): HookHandler {
+  return async (context) => {
+    const modified = transform(context);
+    return { continue: true, modified };
+  };
 }
 
-export default {
-  blockDangerousCommands,
-  blockProtectedFiles,
-  preventForcePush,
-  tddGuard,
-  tddGuardWarn,
-  auditToolUsage,
-  auditFileChanges,
-  sessionStartLogger,
-  sessionEndLogger,
-  runHooks,
-  createDefaultHooksConfig,
-  loadAuditLog,
-  getHooksForSDK,
-};
+/**
+ * Create a hooks manager instance
+ */
+export function createHooksManager(
+  securityConfig?: Partial<SecurityHookConfig>
+): HooksManager {
+  return new HooksManager(securityConfig);
+}
+
+export default HooksManager;

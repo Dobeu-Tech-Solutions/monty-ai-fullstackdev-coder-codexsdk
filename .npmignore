@@ -1,0 +1,63 @@
+# Critical: Never publish these files
+.npmrc
+.env
+.env.*
+*.log
+
+# Source files (only dist/ should be published)
+src/
+*.ts
+tsconfig.json
+vitest.config.ts
+*.tsbuildinfo
+
+# Test files
+tests/
+coverage/
+*.test.ts
+*.test.js
+*.spec.ts
+*.spec.js
+
+# Development files
+node_modules/
+.git/
+.gitignore
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Agent runtime files
+.agent/
+tmpclaude-*
+
+# Build artifacts (will be regenerated)
+*.tgz
+package-lock.json
+
+# Documentation that shouldn't be in package
+CLAUDE.md
+BEST_PRACTICES.md
+AUTONOMOUS_WORKFLOWS.md
+FEATURE_PROPOSAL.md
+*.plan.md
+
+# IDE workspace files
+*.code-workspace
+
+# Python files (if any)
+*.py
+__pycache__/
+*.pyc
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
